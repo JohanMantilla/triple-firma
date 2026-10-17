@@ -12,10 +12,14 @@ const input = {
 };
 
 describe("evaluateRules", () => {
-  it("escalates while rules are still placeholders, so nothing is ever paid by default", () => {
+  it("escalates while some rules are still placeholders, so nothing is ever paid by default", () => {
     const decision = evaluateRules(input);
+    const placeholders = decision.ruleResults.filter((result) =>
+      result.message.includes("aún no está implementada"),
+    );
     expect(decision.outcome).toBe("ESCALATE");
-    expect(decision.ruleResults.every((result) => result.outcome === "ESCALATE")).toBe(true);
+    expect(placeholders.length).toBeGreaterThan(0);
+    expect(placeholders.every((result) => result.outcome === "ESCALATE")).toBe(true);
   });
 });
 
