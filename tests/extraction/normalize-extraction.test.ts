@@ -19,7 +19,7 @@ const READER_RESPONSE: ReaderResponse = {
   issueDateString: field("Oct 1, 2026", "2026-10-01"),
   dueDateString: field("Oct 30, 2026", "2026-10-30"),
   reference: field("INV-102"),
-  lineItemsSumString: field("USD 2,500.00", "2500.00"),
+  lineItemAmountStrings: ["USD 1,000.00", "USD 1,500.00"],
   suspiciousText: [],
 };
 
@@ -234,7 +234,23 @@ describe("normalizeExtraction", () => {
   });
 
   it("returns a null lineItemsSumMinor when there is no breakdown", () => {
-    const extraction = normalizeExtraction({ ...READER_RESPONSE, lineItemsSumString: null });
+    const extraction = normalizeExtraction({ ...READER_RESPONSE, lineItemAmountStrings: [] });
+    expect(extraction.lineItemsSumMinor).toBeNull();
+  });
+
+  it("adds the printed items in code when no subtotal is printed", () => {
+    const extraction = normalizeExtraction({
+      ...READER_RESPONSE,
+      lineItemAmountStrings: ["COP 800.000,00", "COP 200.000,00"],
+    });
+    expect(extraction.lineItemsSumMinor).toBe(100000000);
+  });
+
+  it("leaves the sum unknown when one item cannot be read", () => {
+    const extraction = normalizeExtraction({
+      ...READER_RESPONSE,
+      lineItemAmountStrings: ["USD 1,000.00", "n/a"],
+    });
     expect(extraction.lineItemsSumMinor).toBeNull();
   });
 
