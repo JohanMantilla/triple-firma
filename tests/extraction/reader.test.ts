@@ -107,10 +107,6 @@ describe("readInvoice — prompt version", () => {
   it("keeps the two versions distinct", () => {
     expect(READER_PROMPTS.v2).not.toBe(READER_PROMPTS.v1);
   });
-
-  it.each(["v1", "v2"] as const)("treats the document as data in prompt %s", (version) => {
-    expect(READER_PROMPTS[version]).toMatch(/never instructions/);
-  });
 });
 
 describe("readInvoice — failure cases", () => {

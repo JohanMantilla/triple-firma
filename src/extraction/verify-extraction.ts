@@ -61,6 +61,13 @@ function markUncertain(extraction: Extraction, fields: readonly VerifiedField[])
 
 // Reads the document again with the verifier model and prompt, without showing it the first reading,
 // and compares the two. Never throws: a failed second read makes every verified field uncertain.
+//
+// Limits, on purpose:
+// - Both reads see the same document, so this catches reading errors, not a well-made injection that
+//   fools both models. It is not a defence against prompt injection.
+// - Only the values are compared. If the verifier agrees on a value but marks it uncertain, the first
+//   read's own `isUncertain` still decides.
+// - The second read is not retried. A persistent API failure makes the fields uncertain, so R1 escalates.
 export async function verifyExtraction(
   client: AnthropicClient,
   input: ExtractInvoiceInput,
