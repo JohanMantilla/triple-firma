@@ -95,7 +95,11 @@ function checkPartition(
     .sort((a, b) => basename(a.file).localeCompare(basename(b.file)));
   // 1) archivos <-> filas
   const dir = join(invoicesDir, part);
-  const onDisk = existsSync(dir) ? readdirSync(dir).filter((f) => !f.startsWith(".")).sort() : [];
+  const onDisk = existsSync(dir)
+    ? readdirSync(dir)
+        .filter((f) => !f.startsWith("."))
+        .sort()
+    : [];
   for (const r of rows)
     if (!onDisk.includes(basename(r.file))) err(`[${part}] falta el archivo ${r.file}`);
   for (const f of onDisk)

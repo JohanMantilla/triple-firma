@@ -6,7 +6,7 @@
  *   --decisions <archivo.json>   Un JSON con DecisionRecord[] (ver scripts/eval-lib.ts). Útil para probar el
  *                                evaluador o para evaluar una corrida que E exportó de la base de datos.
  *   --runner <módulo>            Módulo con `export async function runBatch(input): Promise<DecisionRecord[]>`.
- *                                Por defecto: src/pipeline/runBatch.ts  (lo implementan A/E, ver data/README.md §7).
+ *                                Por defecto: src/pipeline/run-batch.ts  (lo implementan A/E, ver data/README.md §7).
  *
  * Otras opciones:
  *   --partition dev,adversarial,holdout   (por defecto dev,adversarial)
@@ -120,7 +120,7 @@ async function main() {
       fail(`${p} debe ser un arreglo de decisiones o { "decisions": [...] }`);
     source = `archivo ${p}`;
   } else {
-    const runnerPath = resolve(String(args["runner"] ?? "src/pipeline/runBatch.ts"));
+    const runnerPath = resolve(String(args["runner"] ?? "src/pipeline/run-batch.ts"));
     if (!existsSync(runnerPath)) {
       fail(
         `No encuentro el pipeline en ${runnerPath}.\n` +

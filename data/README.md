@@ -83,7 +83,7 @@ Si A o B creen que una fila está mal, se discute con todo el equipo; así la m�
 
 ## 7. Contrato para que `npm run eval` llame al pipeline (A/E)
 
-`npm run eval` busca `src/pipeline/runBatch.ts` (cámbialo con `--runner <ruta>`) y llama **una vez por partición**:
+`npm run eval` busca `src/pipeline/run-batch.ts` (cámbialo con `--runner <ruta>`) y llama **una vez por partición**:
 
 ```ts
 export async function runBatch(input: {

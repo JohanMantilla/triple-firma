@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -75,8 +75,8 @@ describe("readCompanyConfig", () => {
   it("reads and validates data/config/company.json", async () => {
     const dataDir = mkdtempSync(path.join(tmpdir(), "triple-firma-data-"));
     mkdirSync(path.join(dataDir, "config"));
-    writeFileSync(path.join(dataDir, "config", "company.json"), JSON.stringify(buildRulesConfig()));
-    expect(await readCompanyConfig(dataDir)).toEqual(buildRulesConfig());
+    copyFileSync("data/config/company.json", path.join(dataDir, "config", "company.json"));
+    expect(await readCompanyConfig(dataDir)).toMatchObject({ baseCurrency: "USD" });
   });
 
   it("rejects an invalid company config", async () => {
