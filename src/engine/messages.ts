@@ -63,6 +63,18 @@ export const MESSAGES = {
         ? `R9: venció el ${dueDate}, hace ${-daysUntilDue} días, dentro de la política.`
         : `R9: vence el ${dueDate}, dentro de ${daysUntilDue} días, dentro de la política.`,
   },
+
+  payee: {
+    unreadable: "R3: no se pudo leer con certeza el beneficiario; se escala por seguridad.",
+    blocked: (blocked: string) => `R3: ${blocked} está bloqueado por la empresa.`,
+    nearBlocked: (payee: string, blocked: string) =>
+      `R3: '${payee}' se parece a '${blocked}', que está bloqueado; requiere revisión humana.`,
+    allowed: (allowed: string) => `R3: ${allowed} está en la lista de beneficiarios permitidos.`,
+    nearAllowed: (payee: string, allowed: string) =>
+      `R3: '${payee}' se parece a '${allowed}' pero no es idéntico; requiere revisión humana.`,
+    unknown: (payee: string) =>
+      `R3: beneficiario nuevo: '${payee}' no está en la lista de beneficiarios permitidos.`,
+  },
 };
 
 // "USD, COP, MXN y ARS"
