@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { IsoDateSchema, TimezoneSchema } from "./dates";
+import { IsoDateSchema, IsoDateTimeSchema, TimezoneSchema } from "./dates";
 import {
   ExchangeRateSchema,
   isExchangeRateOne,
@@ -111,3 +111,11 @@ function areValidPeriodsOverlapping(a: Agreement, b: Agreement): boolean {
   const bStartsBeforeAEnds = a.validUntil === null || b.validFrom <= a.validUntil;
   return aStartsBeforeBEnds && bStartsBeforeAEnds;
 }
+
+// A stored configuration. Every change creates a new version; the engine always reads the latest.
+export const RulesConfigVersionSchema = z.object({
+  version: z.int().positive(),
+  config: RulesConfigSchema,
+  createdAt: IsoDateTimeSchema,
+});
+export type RulesConfigVersion = z.infer<typeof RulesConfigVersionSchema>;
