@@ -21,26 +21,38 @@ describe("HistoryEntrySchema", () => {
     expect(HistoryEntrySchema.safeParse(entry).success).toBe(true);
   });
 
-  it.each(["PAYABLE", "PENDING_APPROVAL"])(
-    "rejects a %s entry without the exchange rate or base amount",
-    (status) => {
-      expect(HistoryEntrySchema.safeParse({ ...entry, status, exchangeRate: null }).success).toBe(
-        false,
-      );
+  it.each(["amountMinor", "currency", "exchangeRate", "baseAmountMinor"])(
+    "rejects a PAYABLE entry without %s, because it will be paid",
+    (field) => {
       expect(
-        HistoryEntrySchema.safeParse({ ...entry, status, baseAmountMinor: null }).success,
+        HistoryEntrySchema.safeParse({ ...entry, status: "PAYABLE", [field]: null }).success,
       ).toBe(false);
     },
   );
 
-  it.each(["PAYABLE", "PENDING_APPROVAL"])(
-    "rejects a %s entry in a currency outside the supported list",
-    (status) => {
-      expect(HistoryEntrySchema.safeParse({ ...entry, status, currency: "EUR" }).success).toBe(
-        false,
-      );
-    },
-  );
+  it("rejects a PAYABLE entry in a currency outside the supported list", () => {
+    expect(
+      HistoryEntrySchema.safeParse({ ...entry, status: "PAYABLE", currency: "EUR" }).success,
+    ).toBe(false);
+  });
+
+  it("keeps a pending escalation with an unreadable reference and payee, so it still reserves budget", () => {
+    const unreadable = { ...entry, payee: null, reference: null };
+    expect(HistoryEntrySchema.safeParse(unreadable).success).toBe(true);
+  });
+
+  it("keeps a pending escalation with an unreadable amount, which reserves nothing because it can never be paid", () => {
+    const unreadable = { ...entry, amountMinor: null, exchangeRate: null, baseAmountMinor: null };
+    expect(HistoryEntrySchema.safeParse(unreadable).success).toBe(true);
+  });
+
+  it.each([
+    ["without its exchange rate", { exchangeRate: null }],
+    ["without its amount", { amountMinor: null }],
+    ["in an unsupported currency", { currency: "EUR" }],
+  ])("rejects a base amount %s", (_case, change) => {
+    expect(HistoryEntrySchema.safeParse({ ...entry, ...change }).success).toBe(false);
+  });
 
   it("keeps a REJECTED invoice in an unsupported currency, so R2 can catch it", () => {
     const rejected = {
