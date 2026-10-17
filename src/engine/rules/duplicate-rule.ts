@@ -7,7 +7,10 @@ import { MESSAGES } from "../messages";
 import { type RuleContext, toLocalDate } from "../rule-context";
 import { isWithinOneEdit } from "./edit-distance";
 
-type Match = { entry: HistoryEntry; kind: "EXACT" | "NEAR" | "UNREADABLE_REFERENCE" };
+type Match = {
+  entry: HistoryEntry;
+  kind: "EXACT" | "NEAR" | "UNREADABLE_REFERENCE" | "UNREADABLE_AMOUNT";
+};
 
 // R2: the invoice is compared with every past invoice of any period except itself. The same file, or
 // an exact duplicate (same payee, amount, currency and reference) of a payable or pending invoice
@@ -44,20 +47,30 @@ export function evaluateDuplicateRule(ctx: RuleContext): RuleResult {
     (amountMinor.value === null || amountMinor.isUncertain) && MESSAGES.fieldLabels.amountMinor,
     (currency.value === null || currency.isUncertain) && MESSAGES.fieldLabels.currency,
   ].filter((label): label is string => typeof label === "string");
+  // payee.value === null is already in `unreadable`; repeating it lets TypeScript narrow payee.value.
   if (unreadable.length > 0 || payee.value === null) {
     return result("ESCALATE", MESSAGES.duplicate.unreadable(unreadable.join(", ")), "UNREADABLE");
   }
 
   const invoiceReference = reference.isUncertain ? null : reference.value;
+  const invoicePayee = normalizePayee(payee.value);
   const matches = others
-    .filter(
-      (entry) =>
-        (entry.payee === null ||
-          normalizePayee(entry.payee) === normalizePayee(payee.value ?? "")) &&
-        entry.amountMinor === amountMinor.value &&
-        entry.currency === currency.value,
-    )
-    .map((entry) => classify(entry, invoiceReference))
+    .map((entry) => {
+      const isSamePayee = entry.payee !== null && normalizePayee(entry.payee) === invoicePayee;
+      // A past invoice whose amount or currency could not be read (kept so a resubmitted copy is
+      // caught) is compared on payee and reference only; it can never be proven identical.
+      if (entry.amountMinor === null || entry.currency === null) {
+        const byReference = isSamePayee ? classify(entry, invoiceReference) : null;
+        const isReferenceMatch =
+          byReference !== null && byReference.kind !== "UNREADABLE_REFERENCE";
+        return isReferenceMatch ? { entry, kind: "UNREADABLE_AMOUNT" as const } : null;
+      }
+      const isSameMoney =
+        entry.amountMinor === amountMinor.value && entry.currency === currency.value;
+      return (isSamePayee || entry.payee === null) && isSameMoney
+        ? classify(entry, invoiceReference)
+        : null;
+    })
     .filter((match): match is Match => match !== null);
 
   const blocking = matches.find(
@@ -89,6 +102,14 @@ export function evaluateDuplicateRule(ctx: RuleContext): RuleResult {
         "ESCALATE",
         MESSAGES.duplicate.previouslyResolved(entry.reference, isRejected, date),
         isRejected ? "PREVIOUSLY_REJECTED" : "PREVIOUSLY_BLOCKED",
+        entry,
+      );
+    }
+    if (kind === "UNREADABLE_AMOUNT") {
+      return result(
+        "ESCALATE",
+        MESSAGES.duplicate.unreadableAmount(entry.reference ?? "", date),
+        "UNREADABLE_AMOUNT",
         entry,
       );
     }

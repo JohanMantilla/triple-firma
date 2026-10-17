@@ -120,6 +120,58 @@ describe("evaluateDuplicateRule (R2)", () => {
     });
   });
 
+  it.each(["REJECTED", "BLOCKED"] as const)(
+    "escalates a clear copy of a %s invoice whose amount could not be read",
+    (status) => {
+      const unreadableAmount = past({
+        reference: "INV-102",
+        status,
+        amountMinor: null,
+        currency: null,
+        exchangeRate: null,
+        baseAmountMinor: null,
+      });
+      expect(evaluate([unreadableAmount])).toMatchObject({
+        outcome: "ESCALATE",
+        compared: { matchedInvoiceId: "inv-0", matchedStatus: status },
+      });
+    },
+  );
+
+  it("escalates a copy of a pending invoice whose amount could not be read", () => {
+    const pending = past({
+      reference: "INV-103",
+      status: "PENDING_APPROVAL",
+      amountMinor: null,
+      exchangeRate: null,
+      baseAmountMinor: null,
+    });
+    expect(evaluate([pending])).toMatchObject({
+      outcome: "ESCALATE",
+      message:
+        "R2: posible duplicado de la factura \u201cINV-103\u201d del 2026-10-03, cuyo monto no se pudo leer; requiere revisión humana.",
+      compared: { matchType: "UNREADABLE_AMOUNT" },
+    });
+  });
+
+  it.each([
+    ["another payee", { payee: "Café Andino SAS" }],
+    ["an unrelated reference", { reference: "INV-555" }],
+    ["no payee", { payee: null }],
+    ["no reference", { reference: null }],
+  ])("ignores a past invoice without amount that has %s", (_case, overrides) => {
+    const unrelated = past({
+      reference: "INV-102",
+      status: "REJECTED",
+      amountMinor: null,
+      currency: null,
+      exchangeRate: null,
+      baseAmountMinor: null,
+      ...overrides,
+    });
+    expect(evaluate([unrelated]).outcome).toBe("PASS");
+  });
+
   it("escalates when the past invoice's reference could not be read", () => {
     expect(evaluate([past({ reference: null })])).toMatchObject({
       outcome: "ESCALATE",

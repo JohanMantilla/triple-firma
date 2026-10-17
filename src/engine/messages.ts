@@ -111,6 +111,8 @@ export const MESSAGES = {
       `R2: coincide con ${reference === null ? "una factura" : `la factura ${quoteUntrusted(reference)}`}, que fue ${isRejected ? "rechazada" : "frenada"} el ${date}; requiere revisión humana.`,
     unreadableReference: (payee: string, amount: string) =>
       `R2: posible duplicado de una factura de ${quoteUntrusted(payee)} por ${amount}; una de las referencias no se pudo leer; requiere revisión humana.`,
+    unreadableAmount: (reference: string, date: string) =>
+      `R2: posible duplicado de la factura ${quoteUntrusted(reference)} del ${date}, cuyo monto no se pudo leer; requiere revisión humana.`,
     none: "R2: no hay facturas anteriores iguales ni parecidas.",
   },
 
