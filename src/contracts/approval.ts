@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { IsoDateTimeSchema } from "./dates";
 import { type RuleId, RuleResultSchema } from "./decision";
+import {
+  CurrencyCodeSchema,
+  ExchangeRateSchema,
+  MinorAmountSchema,
+  PositiveMinorAmountSchema,
+} from "./money";
 
 export const REVALIDATED_RULE_IDS: readonly RuleId[] = ["R2", "R6"];
 
@@ -16,13 +22,33 @@ export const ApprovalRequestSchema = z.object({
 export type ApprovalRequest = z.infer<typeof ApprovalRequestSchema>;
 
 // A rejection is final and revalidates nothing. An approval revalidates exactly duplicates (R2) and
-// budget (R6) at that moment, and pays only if both pass.
+// budget (R6) at that moment, and pays only if both pass. An approval that pays must record the money
+// it commits, so it always counts against the budget; R6 revalidation BLOCKs when baseAmountMinor is
+// unknown (for example an escalation caused by an unknown currency or an unreadable amount).
 export const ApprovalSchema = ApprovalRequestSchema.extend({
   decisionId: z.string().min(1),
   resultingOutcome: z.enum(["PAY", "BLOCK"]),
   revalidationResults: z.array(RuleResultSchema),
+  amountMinor: PositiveMinorAmountSchema.nullable(),
+  currency: CurrencyCodeSchema.nullable(),
+  exchangeRate: ExchangeRateSchema.nullable(),
+  baseAmountMinor: MinorAmountSchema.nullable(),
   resolvedAt: IsoDateTimeSchema,
 }).superRefine((approval, ctx) => {
+  const hasMoneyData =
+    approval.amountMinor !== null &&
+    approval.currency !== null &&
+    approval.exchangeRate !== null &&
+    approval.baseAmountMinor !== null;
+  if (approval.resultingOutcome === "PAY" && !hasMoneyData) {
+    ctx.addIssue({
+      code: "custom",
+      message:
+        "An approval that pays must record its amount, currency, exchange rate and base amount",
+      path: ["baseAmountMinor"],
+    });
+  }
+
   if (approval.action === "REJECT") {
     if (approval.resultingOutcome !== "BLOCK") {
       ctx.addIssue({

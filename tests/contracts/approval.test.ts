@@ -15,6 +15,10 @@ function buildApproval(overrides: Partial<Approval> = {}): Approval {
     comment: "Pago recurrente revisado.",
     resultingOutcome: "PAY",
     revalidationResults: PASSED_REVALIDATION,
+    amountMinor: 900_000_000,
+    currency: "COP",
+    exchangeRate: "4000",
+    baseAmountMinor: 225_000,
     resolvedAt: "2026-10-17T15:00:00Z",
     ...overrides,
   };
@@ -88,6 +92,28 @@ describe("ApprovalSchema", () => {
     expect(ApprovalSchema.safeParse(buildApproval({ resultingOutcome: "BLOCK" })).success).toBe(
       false,
     );
+  });
+
+  it.each(["amountMinor", "currency", "exchangeRate", "baseAmountMinor"] as const)(
+    "rejects paying without %s, so every paid approval counts against the budget",
+    (field) => {
+      expect(ApprovalSchema.safeParse(buildApproval({ [field]: null })).success).toBe(false);
+    },
+  );
+
+  it("accepts blocking an approval whose currency was unknown, without money data", () => {
+    const revalidationResults: RuleResult[] = [
+      PASSED_REVALIDATION[0],
+      { ruleId: "R6", outcome: "BLOCK", message: "Monto en USD desconocido.", compared: {} },
+    ];
+    const approval = buildApproval({
+      resultingOutcome: "BLOCK",
+      revalidationResults,
+      currency: "EUR",
+      exchangeRate: null,
+      baseAmountMinor: null,
+    });
+    expect(ApprovalSchema.safeParse(approval).success).toBe(true);
   });
 
   it("rejects a rejection that pays", () => {
