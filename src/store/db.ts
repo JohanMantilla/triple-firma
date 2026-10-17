@@ -18,13 +18,9 @@ export async function openDb(url = process.env.TURSO_DATABASE_URL): Promise<Clie
   return db;
 }
 
-const globalForDb = globalThis as typeof globalThis & {
-  tripleFirmaDb?: Promise<Client>;
-  tripleFirmaWriteQueue?: Promise<unknown>;
-};
+const globalForDb = globalThis as typeof globalThis & { tripleFirmaDb?: Promise<Client> };
 
-// One client and one write queue per server process, kept on globalThis so dev hot reload does not
-// open one per reload.
+// One client per server process, kept on globalThis so dev hot reload does not open one per reload.
 // A failed open is forgotten, so the next request retries instead of failing until a restart.
 export function getDb(): Promise<Client> {
   globalForDb.tripleFirmaDb ??= openDb().catch((error: unknown) => {
@@ -40,6 +36,8 @@ export async function resetDb(db: Client): Promise<void> {
   await db.executeMultiple(SCHEMA);
 }
 
+let writeQueue: Promise<unknown> = Promise.resolve();
+
 // Runs fn in one write transaction (BEGIN IMMEDIATE): commits when it returns, rolls back when it throws.
 // ponytail: one queue per process, because a local file blocks the event loop while it waits for a lock
 // that this same process holds, and fails with SQLITE_BUSY. Turso queues writers across processes on
@@ -48,7 +46,7 @@ export function withWriteTransaction<T>(
   db: Client,
   fn: (tx: Transaction) => Promise<T>,
 ): Promise<T> {
-  const run = (globalForDb.tripleFirmaWriteQueue ?? Promise.resolve()).then(async () => {
+  const run = writeQueue.then(async () => {
     const tx = await db.transaction("write");
     try {
       const result = await fn(tx);
@@ -58,6 +56,6 @@ export function withWriteTransaction<T>(
       tx.close();
     }
   });
-  globalForDb.tripleFirmaWriteQueue = run.catch(() => undefined);
+  writeQueue = run.catch(() => undefined);
   return run;
 }
