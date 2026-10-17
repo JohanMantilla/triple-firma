@@ -29,8 +29,8 @@ import {
   renderConsoleSummary,
   renderMarkdown,
   renderRowsTable,
-} from "./eval-lib.ts";
-import type { DecisionRecord, ExpectedRow, Partition, RowEval } from "./eval-lib.ts";
+} from "./eval-lib";
+import type { DecisionRecord, ExpectedRow, Partition, RowEval } from "./eval-lib";
 
 export interface RunBatchInput {
   partition: Partition;
