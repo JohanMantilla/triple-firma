@@ -73,9 +73,11 @@ const WORD_PATTERNS: readonly (readonly [InstructionPatternId, RegExp])[] = [
   ],
 ];
 
-// Chat role markers are punctuation, so they are searched before punctuation becomes spaces.
+// Chat role markers are punctuation, so they are searched before punctuation becomes spaces. Spaces
+// after a slash are only looked for when there is a slash: two optional runs of spaces in a row would
+// make a "<" followed by 200,000 spaces take quadratic time.
 const ROLE_MARKER_PATTERN =
-  /<\s*\/?\s*(?:system|assistant|user|instructions?|prompt)\s*>|<\|\s*(?:im_start|im_end|system|endoftext)\s*\|>|\[\s*\/?\s*(?:inst|system|sys)\s*\]|<<\s*\/?\s*sys\s*>>|^[ \t]*(?:system|assistant)[ \t]*:/m;
+  /<\s*(?:\/\s*)?(?:system|assistant|user|instructions?|prompt)\s*>|<\|\s*(?:im_start|im_end|system|endoftext)\s*\|>|\[\s*(?:\/\s*)?(?:inst|system|sys)\s*\]|<<\s*(?:\/\s*)?sys\s*>>|^[ \t]*(?:system|assistant)[ \t]*:/m;
 
 // Invisible characters, compatibility forms, case, accents and lookalike letters from other scripts
 // never hide a phrase: a zero-width space inside a word, "aprobación" and a Cyrillic i read the same

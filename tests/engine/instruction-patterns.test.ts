@@ -103,6 +103,32 @@ describe("findInstruction", () => {
     expect(findInstruction("ignore this if you already sent the instructions")).toBeNull();
   });
 
+  it.each([
+    ["an opening angle bracket", "<"],
+    ["a closing tag", "</"],
+    ["a square bracket", "["],
+    ["a double angle bracket", "<<"],
+  ])("runs in linear time on %s followed by 200,000 spaces or line breaks", (_case, opening) => {
+    for (const filler of [" ", "\n", "\t"]) {
+      const text = `${opening.repeat(2)}${filler.repeat(200_000)}x`;
+      const start = performance.now();
+      expect(findInstruction(text)).toBeNull();
+      expect(performance.now() - start).toBeLessThan(1_000);
+    }
+  });
+
+  it("runs in linear time on 200,000 characters of repeated near-misses", () => {
+    for (const text of [
+      "ignore ".repeat(30_000),
+      "sin ".repeat(50_000),
+      "you are ".repeat(25_000),
+    ]) {
+      const start = performance.now();
+      expect(findInstruction(text)).toBeNull();
+      expect(performance.now() - start).toBeLessThan(1_000);
+    }
+  });
+
   it("returns null for empty or blank text", () => {
     expect(findInstruction("")).toBeNull();
     expect(findInstruction("  \n\t ")).toBeNull();
