@@ -44,7 +44,8 @@ export async function processInvoiceSet(
   return results;
 }
 
-// data/expected.csv (C). A missing file only means there are no expected rows yet.
+// data/expected.csv (C). A missing file means no expected rows: the consumer (eval, CI) must treat
+// total 0 or a non-empty missingFiles as a failure, never as "0 leaks".
 export async function readExpectedDecisions(dataDir = DATA_DIR): Promise<ExpectedDecision[]> {
   try {
     return parseExpectedCsv(await readFile(path.join(dataDir, "expected.csv"), "utf8"));

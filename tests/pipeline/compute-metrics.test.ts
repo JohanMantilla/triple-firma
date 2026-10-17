@@ -3,7 +3,7 @@ import type { Decision, DecisionOutcome, RuleId } from "@/contracts/decision";
 import { type DecisionRecord, deriveHistoryStatus } from "@/contracts/decision-record";
 import type { ExpectedDecision } from "@/contracts/metrics";
 import { computeMetrics, parseExpectedCsv } from "@/pipeline/compute-metrics";
-import { buildDecision } from "../contracts/fixtures";
+import { buildApproval, buildDecision } from "../contracts/fixtures";
 import { buildInvoice } from "../engine/fixtures";
 
 function buildRecord(
@@ -75,6 +75,37 @@ describe("computeMetrics", () => {
     });
   });
 
+  it("measures every record of a file name, newest or oldest", () => {
+    const older = buildRecord("dev/a.pdf", "BLOCK");
+    const newer = buildRecord("dev/a.pdf", "PAY");
+    for (const records of [
+      [newer, older],
+      [older, newer],
+    ]) {
+      const metrics = computeMetrics(records, [expected("dev/a.pdf", "BLOCK")]);
+      expect(metrics).toMatchObject({
+        total: 2,
+        leaks: 1,
+        leakFiles: ["dev/a.pdf"],
+        accuracy: 1 / 2,
+      });
+    }
+  });
+
+  it("lists a file once however many of its records leak", () => {
+    const metrics = computeMetrics(
+      [buildRecord("dev/a.pdf", "PAY"), buildRecord("dev/a.pdf", "PAY")],
+      [expected("dev/a.pdf", "ESCALATE")],
+    );
+    expect(metrics).toMatchObject({ total: 2, leaks: 1, leakFiles: ["dev/a.pdf"] });
+  });
+
+  it("still counts a PAY decision that carries an approval as a leak", () => {
+    const record = buildRecord("dev/a.pdf", "PAY");
+    record.approval = buildApproval(record.decision, "APPROVED");
+    expect(computeMetrics([record], [expected("dev/a.pdf", "BLOCK")])).toMatchObject({ leaks: 1 });
+  });
+
   it("lists expected files without a decision and leaves them out of every rate", () => {
     const metrics = computeMetrics(
       [buildRecord("dev/a.pdf", "BLOCK")],
@@ -138,7 +169,7 @@ describe("parseExpectedCsv", () => {
 
   it("reads a file saved by a spreadsheet: BOM, CRLF, spaces and trailing blank lines", () => {
     const text =
-      "﻿file,expected_outcome,expected_rules\r\n dev/01.pdf , ESCALATE , R5 ; R7 \r\n\r\n";
+      "\uFEFFfile,expected_outcome,expected_rules\r\n dev/01.pdf , ESCALATE , R5 ; R7 \r\n\r\n";
     expect(parseExpectedCsv(text)).toEqual([
       { fileName: "dev/01.pdf", expectedOutcome: "ESCALATE", expectedRuleIds: ["R5", "R7"] },
     ]);
@@ -157,6 +188,11 @@ describe("parseExpectedCsv", () => {
     expect(() =>
       parseExpectedCsv("file,expected_outcome,expected_rules\ndev/01.pdf,PAY,R1,x\n"),
     ).toThrow("line 2");
+  });
+
+  it("returns no rows for a header-only file and rejects a row without an outcome", () => {
+    expect(parseExpectedCsv("file,expected_outcome,expected_rules\n")).toEqual([]);
+    expect(() => parseExpectedCsv("file,expected_outcome,expected_rules\ndev/01.pdf\n")).toThrow();
   });
 
   it("returns no rows for an empty file", () => {

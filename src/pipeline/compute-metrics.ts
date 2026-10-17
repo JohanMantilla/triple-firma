@@ -16,7 +16,7 @@ type Measured = { expected: ExpectedDecision; decision: Decision };
 // spaces). ponytail: plain comma split, since no field contains a comma; use a CSV parser if one ever
 // needs quoting.
 export function parseExpectedCsv(text: string): ExpectedDecision[] {
-  const lines = text.replace(/^﻿/, "").split(/\r?\n/);
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
   const [header, ...rows] = lines.filter((line) => line.trim() !== "");
   if (header === undefined) return [];
   if (header.replace(/\s/g, "") !== EXPECTED_HEADER) {
@@ -46,11 +46,18 @@ export function computeMetrics(
   records: readonly DecisionRecord[],
   expected: readonly ExpectedDecision[],
 ): Metrics {
-  const byFile = new Map(records.map((record) => [record.fileName, record.decision]));
-  const measured: Measured[] = expected.flatMap((row) => {
-    const decision = byFile.get(row.fileName);
-    return decision === undefined ? [] : [{ expected: row, decision }];
-  });
+  const decisionsByFile = new Map<string, Decision[]>();
+  for (const record of records) {
+    decisionsByFile.set(record.fileName, [
+      ...(decisionsByFile.get(record.fileName) ?? []),
+      record.decision,
+    ]);
+  }
+  // A file name is not unique in the store (same name, different bytes): every record is measured, so
+  // a newer PAY cannot hide behind an older BLOCK.
+  const measured: Measured[] = expected.flatMap((row) =>
+    (decisionsByFile.get(row.fileName) ?? []).map((decision) => ({ expected: row, decision })),
+  );
   const autonomous = measured.filter(({ expected: row }) =>
     AUTONOMOUS_OUTCOMES.includes(row.expectedOutcome),
   );
@@ -58,13 +65,16 @@ export function computeMetrics(
     .filter(
       ({ expected: row, decision }) => decision.outcome === "PAY" && row.expectedOutcome !== "PAY",
     )
-    .map(({ expected: row }) => row.fileName);
+    .map(({ expected: row }) => row.fileName)
+    .filter((fileName, index, fileNames) => fileNames.indexOf(fileName) === index);
 
   return MetricsSchema.parse({
     total: measured.length,
     leaks: leakFiles.length,
     leakFiles,
-    missingFiles: expected.filter((row) => !byFile.has(row.fileName)).map((row) => row.fileName),
+    missingFiles: expected
+      .filter((row) => !decisionsByFile.has(row.fileName))
+      .map((row) => row.fileName),
     accuracy: rate(measured.filter(isCorrect).length, measured.length),
     autonomy: rate(autonomous.filter(isCorrect).length, autonomous.length),
     overEscalation: rate(
