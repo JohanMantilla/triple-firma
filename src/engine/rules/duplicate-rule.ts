@@ -50,6 +50,29 @@ export function evaluateDuplicateRule(ctx: RuleContext): RuleResult {
   };
 }
 
+// R2 at approval (invariant 8): only what makes paying wrong is checked again. The same file or an
+// exact copy already PAYABLE blocks, so the same invoice is never paid twice, even when a retry left a
+// second pending escalation of it. Everything a person reviews (near duplicates, matches with rejected
+// or blocked invoices, unreadable fields, other pending escalations they are choosing among) passes,
+// because the approver already saw it. A BLOCKED or REJECTED entry of the same file passes too, so a
+// retry can never make the original escalation impossible to approve.
+export function checkDuplicateOnApproval(ctx: RuleContext): RuleResult {
+  const payable = ctx.history.filter((entry) => entry.status === "PAYABLE");
+  const comparison = compareWithHistory(ctx, payable);
+  if (comparison.outcome === "BLOCK") return comparison;
+  return {
+    ruleId: "R2",
+    outcome: "PASS",
+    message: MESSAGES.duplicate.noneOnApproval,
+    compared: {
+      matchType: "NONE",
+      matchedInvoiceId: null,
+      matchedStatus: null,
+      matchedReference: null,
+    },
+  };
+}
+
 function compareWithHistory(ctx: RuleContext, others: readonly HistoryEntry[]): RuleResult {
   const { invoice, config } = ctx;
   const { payee, amountMinor, currency, reference } = invoice.extraction;

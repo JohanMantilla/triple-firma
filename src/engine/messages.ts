@@ -116,6 +116,8 @@ export const MESSAGES = {
     unreadableAmount: (reference: string | null, date: string) =>
       `R2: posible duplicado de ${invoiceNamed(reference)} del ${date}, cuyo monto no se pudo leer; requiere revisión humana.`,
     none: "R2: no hay facturas anteriores iguales ni parecidas.",
+    noneOnApproval:
+      "R2 (al aprobar): no hay una factura igual ya pagable ni el mismo archivo ya pagado.",
   },
 
   budget: {
