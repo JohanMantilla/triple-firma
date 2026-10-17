@@ -1,4 +1,12 @@
-import { RULE_IDS, type RuleResult } from "@/contracts/decision";
+import type { Approval } from "@/contracts/approval";
+import {
+  type Decision,
+  type DecisionOutcome,
+  RULE_IDS,
+  type RuleId,
+  type RuleOutcome,
+  type RuleResult,
+} from "@/contracts/decision";
 import type { Extraction } from "@/contracts/extraction";
 import type { RulesConfig } from "@/contracts/rules-config";
 
@@ -77,4 +85,71 @@ export function buildRuleResults(
     message: `${ruleId} result`,
     compared: {},
   }));
+}
+
+const OUTCOME_RULES: Record<DecisionOutcome, Partial<Record<RuleId, RuleOutcome>>> = {
+  PAY: {},
+  ESCALATE: { R5: "ESCALATE" },
+  BLOCK: { R2: "BLOCK" },
+};
+
+// A decision that satisfies DecisionSchema for the given outcome (USD 2,500.00), for tests that store
+// or compare decisions without running the engine.
+export function buildDecision(
+  invoiceId: string,
+  outcome: DecisionOutcome = "PAY",
+  overrides: Partial<Decision> = {},
+): Decision {
+  const ruleResults = buildRuleResults(OUTCOME_RULES[outcome]);
+  const failed = ruleResults.filter((result) => result.outcome !== "PASS");
+  return {
+    id: `decision-${invoiceId}`,
+    invoiceId,
+    outcome,
+    ruleResults,
+    amountMinor: 250_000,
+    currency: "USD",
+    baseAmountMinor: 250_000,
+    exchangeRate: "1",
+    explanation:
+      failed.length === 0
+        ? "Pagada: todas las reglas pasaron."
+        : failed.map((result) => result.message).join(" "),
+    configVersion: 1,
+    decidedAt: "2026-10-17T14:00:00Z",
+    ...overrides,
+  };
+}
+
+export type ApprovalKind = "APPROVED" | "APPROVED_BUT_BLOCKED" | "REJECTED";
+
+// A resolution of the given decision that satisfies ApprovalSchema, carrying the decision's money.
+export function buildApproval(
+  decision: Decision,
+  kind: ApprovalKind,
+  resolvedAt = "2026-10-17T15:00:00Z",
+): Approval {
+  const resolution = {
+    decisionId: decision.id,
+    approver: "Ana Pérez",
+    comment: "Revisado con el acuerdo.",
+    amountMinor: decision.amountMinor,
+    currency: decision.currency,
+    exchangeRate: decision.exchangeRate,
+    baseAmountMinor: decision.baseAmountMinor,
+    resolvedAt,
+  };
+  if (kind === "REJECTED") {
+    return { ...resolution, action: "REJECT", resultingOutcome: "BLOCK", revalidationResults: [] };
+  }
+  const budgetOutcome = kind === "APPROVED" ? "PASS" : "BLOCK";
+  return {
+    ...resolution,
+    action: "APPROVE",
+    resultingOutcome: kind === "APPROVED" ? "PAY" : "BLOCK",
+    revalidationResults: [
+      { ruleId: "R2", outcome: "PASS", message: "R2 result", compared: {} },
+      { ruleId: "R6", outcome: budgetOutcome, message: "R6 result", compared: {} },
+    ],
+  };
 }
