@@ -16,6 +16,7 @@ const EXTRACTION: Extraction = {
   payee: field("Dev Partners SAS", "Dev Partners SAS"),
   amountMinor: field(250000, "USD 2,500.00"),
   currency: field("USD", "USD"),
+  issueDate: field("2026-10-01", "Oct 1, 2026"),
   dueDate: field("2026-10-30", "Oct 30, 2026"),
   reference: field("INV-102", "INV-102"),
   lineItemsSumMinor: null,

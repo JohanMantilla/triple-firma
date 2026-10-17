@@ -30,6 +30,7 @@ export function makeUncertainExtraction(): Extraction {
     payee: UNCERTAIN_FIELD,
     amountMinor: UNCERTAIN_FIELD,
     currency: UNCERTAIN_FIELD,
+    issueDate: UNCERTAIN_FIELD,
     dueDate: UNCERTAIN_FIELD,
     reference: UNCERTAIN_FIELD,
     lineItemsSumMinor: null,

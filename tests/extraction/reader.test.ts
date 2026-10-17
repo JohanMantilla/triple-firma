@@ -20,6 +20,12 @@ const VALID_RESPONSE: ReaderResponse = {
     isUncertain: false,
   },
   currencyRaw: { raw: "USD", value: "USD", evidence: "Total: USD 2,500.00", isUncertain: false },
+  issueDateString: {
+    raw: "Oct 1, 2026",
+    value: "2026-10-01",
+    evidence: "Issued: Oct 1, 2026",
+    isUncertain: false,
+  },
   dueDateString: {
     raw: "Oct 30, 2026",
     value: "2026-10-30",

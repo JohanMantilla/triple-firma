@@ -191,8 +191,15 @@ function buildField<T>(
 }
 
 export function normalizeExtraction(response: ReaderResponse): Extraction {
-  const { payee, amountString, currencyRaw, dueDateString, reference, lineItemsSumString } =
-    response;
+  const {
+    payee,
+    amountString,
+    currencyRaw,
+    issueDateString,
+    dueDateString,
+    reference,
+    lineItemsSumString,
+  } = response;
   const lineItemsSumMinor = lineItemsSumString?.raw
     ? normalizeAmount(lineItemsSumString.raw)
     : null;
@@ -208,6 +215,11 @@ export function normalizeExtraction(response: ReaderResponse): Extraction {
       currencyRaw,
       CurrencyCodeSchema,
       currencyRaw.raw ? normalizeCurrency(currencyRaw.raw) : null,
+    ),
+    issueDate: buildField(
+      issueDateString,
+      IsoDateSchema,
+      issueDateString.raw ? normalizeDate(issueDateString.raw) : null,
     ),
     dueDate: buildField(
       dueDateString,

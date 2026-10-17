@@ -19,6 +19,7 @@ const READER_RESPONSE: ReaderResponse = {
   payee: field("Dev Partners SAS"),
   amountString: field("USD 2,500.00", "2500.00"),
   currencyRaw: field("USD"),
+  issueDateString: field("Oct 1, 2026", "2026-10-01"),
   dueDateString: field("Oct 30, 2026", "2026-10-30"),
   reference: field("INV-102"),
   lineItemsSumString: null,
@@ -57,6 +58,7 @@ describe("extractInvoice — success", () => {
 
     expect(result).toMatchObject({ ok: true, cached: false });
     expect(result.extraction.amountMinor.value).toBe(250000);
+    expect(result.extraction.issueDate.value).toBe("2026-10-01");
     expect(result.extraction.dueDate.value).toBe("2026-10-30");
     expect(await readdir(cacheDir)).toEqual([`${INPUT.fileHash}.json`]);
   });
@@ -153,7 +155,14 @@ describe("makeUncertainExtraction", () => {
   it("is a valid Extraction with every field null and uncertain", () => {
     const extraction = makeUncertainExtraction();
     expect(ExtractionSchema.safeParse(extraction).success).toBe(true);
-    for (const key of ["payee", "amountMinor", "currency", "dueDate", "reference"] as const) {
+    for (const key of [
+      "payee",
+      "amountMinor",
+      "currency",
+      "issueDate",
+      "dueDate",
+      "reference",
+    ] as const) {
       expect(extraction[key]).toEqual({
         raw: null,
         value: null,

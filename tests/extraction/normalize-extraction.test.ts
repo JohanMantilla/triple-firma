@@ -16,6 +16,7 @@ const READER_RESPONSE: ReaderResponse = {
   payee: field("Dev Partners SAS"),
   amountString: field("USD 2,500.00", "2500.00"),
   currencyRaw: field("USD"),
+  issueDateString: field("Oct 1, 2026", "2026-10-01"),
   dueDateString: field("Oct 30, 2026", "2026-10-30"),
   reference: field("INV-102"),
   lineItemsSumString: field("USD 2,500.00", "2500.00"),
@@ -138,6 +139,7 @@ describe("normalizeExtraction", () => {
       isUncertain: false,
     });
     expect(extraction.currency.value).toBe("USD");
+    expect(extraction.issueDate.value).toBe("2026-10-01");
     expect(extraction.dueDate.value).toBe("2026-10-30");
     expect(extraction.payee.value).toBe("Dev Partners SAS");
     expect(extraction.reference.value).toBe("INV-102");
@@ -178,6 +180,14 @@ describe("normalizeExtraction", () => {
     expect(dueDate.isUncertain).toBe(true);
   });
 
+  it("marks an ambiguous issue date as null and uncertain", () => {
+    const response = { ...READER_RESPONSE, issueDateString: field("03/04/2026") };
+    const { issueDate, dueDate } = normalizeExtraction(response);
+    expect(issueDate.value).toBeNull();
+    expect(issueDate.isUncertain).toBe(true);
+    expect(dueDate.value).toBe("2026-10-30");
+  });
+
   it("keeps a field uncertain when the reader flagged it", () => {
     const response = { ...READER_RESPONSE, reference: field("INV-102", "INV-102", true) };
     const { reference } = normalizeExtraction(response);
@@ -192,11 +202,19 @@ describe("normalizeExtraction", () => {
       payee: missing,
       amountString: missing,
       currencyRaw: missing,
+      issueDateString: missing,
       dueDateString: missing,
       reference: missing,
     });
     expect(ExtractionSchema.safeParse(extraction).success).toBe(true);
-    for (const key of ["payee", "amountMinor", "currency", "dueDate", "reference"] as const) {
+    for (const key of [
+      "payee",
+      "amountMinor",
+      "currency",
+      "issueDate",
+      "dueDate",
+      "reference",
+    ] as const) {
       expect(extraction[key]).toEqual({
         raw: null,
         value: null,

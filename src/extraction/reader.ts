@@ -20,6 +20,7 @@ export const ReaderResponseSchema = z.object({
   payee: ReaderFieldSchema,
   amountString: ReaderFieldSchema,
   currencyRaw: ReaderFieldSchema,
+  issueDateString: ReaderFieldSchema,
   dueDateString: ReaderFieldSchema,
   reference: ReaderFieldSchema,
   lineItemsSumString: ReaderFieldSchema.nullable(),
