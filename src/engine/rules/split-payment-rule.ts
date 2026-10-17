@@ -13,8 +13,10 @@ import { daysBetween, type RuleContext, toLocalDate } from "../rule-context";
 // Earlier payments are PAYABLE and PENDING_APPROVAL entries (the parts of a split usually arrive
 // together, so the first ones may still be pending) with a known base amount; REJECTED and BLOCKED
 // are never paid. The payee must match exactly through normalizePayee: a look-alike name is R3's job.
-// An entry with this invoice's id is the same invoice decided again, not another part. Without earlier
-// payments there is no split, and an invoice that alone exceeds the threshold is R5's job.
+// An entry with this invoice's id counts too, as in R6: ids are assigned outside the engine, and
+// deciding an invoice again can then escalate it but never pay it twice (R7 is not revalidated at
+// approval). Without earlier payments there is no split, and an invoice that alone exceeds the
+// threshold is R5's job.
 export function evaluateSplitPaymentRule(ctx: RuleContext): RuleResult {
   const { invoice, config, baseAmountMinor } = ctx;
   const { value: payee, isUncertain } = invoice.extraction.payee;
@@ -38,13 +40,22 @@ export function evaluateSplitPaymentRule(ctx: RuleContext): RuleResult {
   if (earlier.length === 0) {
     return result("PASS", MESSAGES.splitPayment.noEarlierPayments(payee, windowDays), {
       earlierCount: 0,
+      earlierInvoiceIds: "",
+      earlierSumMinor: 0,
       totalMinor: baseAmountMinor,
     });
   }
 
-  const totalMinor = sumMinor([baseAmountMinor, ...earlier.map((entry) => entry.baseAmountMinor)]);
+  const earlierSumMinor = sumMinor(earlier.map((entry) => entry.baseAmountMinor));
+  const totalMinor = sumMinor([earlierSumMinor, baseAmountMinor]);
   const money = (amountMinor: number) => formatMoney(amountMinor, baseCurrency);
-  const details = { earlierCount: earlier.length, totalMinor };
+  // The approver can see which invoices were summed.
+  const details = {
+    earlierCount: earlier.length,
+    earlierInvoiceIds: earlier.map((entry) => entry.invoiceId).join(","),
+    earlierSumMinor,
+    totalMinor,
+  };
   const invoiceCount = earlier.length + 1;
   if (totalMinor > approvalThresholdMinor) {
     return result(
@@ -79,7 +90,7 @@ function isEarlierPart(
   payee: string,
   today: string,
 ): entry is HistoryEntry & { baseAmountMinor: number } {
-  if (entry.invoiceId === ctx.invoice.id || !isCountedInBudget(entry.status)) return false;
+  if (!isCountedInBudget(entry.status)) return false;
   if (entry.baseAmountMinor === null || entry.payee === null) return false;
   if (normalizePayee(entry.payee) !== normalizePayee(payee)) return false;
   const decidedOn = toLocalDate(entry.decidedAt, ctx.config.timezone);

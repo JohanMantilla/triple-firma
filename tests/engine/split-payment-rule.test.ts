@@ -65,6 +65,8 @@ describe("evaluateSplitPaymentRule (R7)", () => {
           approvalThresholdMinor: 200_000,
           baseAmountMinor: 100_000,
           earlierCount: 0,
+          earlierInvoiceIds: "",
+          earlierSumMinor: 0,
           totalMinor: 100_000,
         },
       });
@@ -108,7 +110,12 @@ describe("evaluateSplitPaymentRule (R7)", () => {
       });
       expect(result).toMatchObject({
         outcome: "ESCALATE",
-        compared: { earlierCount: 2, totalMinor: 260_000 },
+        compared: {
+          earlierCount: 2,
+          earlierInvoiceIds: "inv-a,inv-b",
+          earlierSumMinor: 180_000,
+          totalMinor: 260_000,
+        },
       });
       expect(result.message).toContain("(3 facturas, incluida esta)");
     });
@@ -202,10 +209,14 @@ describe("evaluateSplitPaymentRule (R7)", () => {
       });
     });
 
-    it("does not count this same invoice decided again", () => {
-      expect(evaluate({ history: [earlier(100_001, { invoiceId: "inv-1" })] }).outcome).toBe(
-        "PASS",
-      );
+    it("counts an entry with this invoice's id but another file: ids come from outside the engine", () => {
+      const reusedId = earlier(100_001, { invoiceId: "inv-1", fileHash: "c".repeat(64) });
+      expect(evaluate({ history: [reusedId] }).outcome).toBe("ESCALATE");
+    });
+
+    it("counts this same invoice decided again, which can escalate it but never pay it twice", () => {
+      const itself = earlier(100_001, { invoiceId: "inv-1", fileHash: "a".repeat(64) });
+      expect(evaluate({ history: [itself] }).outcome).toBe("ESCALATE");
     });
 
     it("counts a copy of this file under another invoice id", () => {
