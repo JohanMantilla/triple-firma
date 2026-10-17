@@ -14,6 +14,7 @@ export const MESSAGES = {
     payee: "Beneficiario",
     amountMinor: "Monto",
     currency: "Moneda",
+    issueDate: "Fecha de emisión",
     dueDate: "Vencimiento",
     reference: "Referencia",
   },
@@ -140,6 +141,25 @@ export const MESSAGES = {
       budget: string,
     ) =>
       `R6: presupuesto de ${period}: ${committed} comprometidos${reserved === null ? "" : ` + ${reserved} reservados`} + este pago (${amount}) = ${total} de ${budget}.`,
+  },
+
+  suspiciousContent: {
+    passed: (hasLineItems: boolean) =>
+      hasLineItems
+        ? "R10: no se encontraron instrucciones dirigidas al sistema y el total cuadra con la suma de ítems."
+        : "R10: no se encontraron instrucciones dirigidas al sistema; la factura no detalla ítems.",
+    readerFlagged: (firstFlag: string, count: number) =>
+      `el Lector marcó texto sospechoso: ${quoteUntrusted(firstFlag)}${count > 1 ? ` (${count} en total)` : ""}.`,
+    instructionInSource: (match: string) =>
+      `el texto original contiene una instrucción dirigida al sistema, que se ignoró: ${quoteUntrusted(match)}.`,
+    instructionInField: (label: string, match: string) =>
+      `lo leído en ${label} contiene una instrucción dirigida al sistema, que se ignoró: ${quoteUntrusted(match)}.`,
+    totalMismatch: (amount: string, lineItemsSum: string, tax: string | null) =>
+      tax === null
+        ? `el total (${amount}) no cuadra con la suma de ítems (${lineItemsSum}).`
+        : `el total (${amount}) no cuadra con la suma de ítems (${lineItemsSum}) más impuestos (${tax}).`,
+    escalated: (reasons: readonly string[]) =>
+      `R10: ${reasons.join(" ")} Requiere revisión humana.`,
   },
 };
 
