@@ -1,0 +1,107 @@
+{
+  "partition": "dev",
+  "asOf": "2026-10-17",
+  "note": "Estado inicial del registro ANTES de procesar la partición, en orden de nombre de archivo. Cada partición arranca desde su propio seed (el estado no se arrastra entre particiones).",
+  "budgetUsedOctoberUsdMinor": 300000,
+  "payments": [
+    {
+      "id": "S-001",
+      "beneficiary": "Dev Partners SAS",
+      "reference": "FAC-1018",
+      "amountMinor": 720000000,
+      "currency": "COP",
+      "usdMinor": 180000,
+      "paidOn": "2026-09-05",
+      "status": "paid",
+      "approvedByHuman": false
+    },
+    {
+      "id": "S-002",
+      "beneficiary": "Luna Diseño SA de CV",
+      "reference": "LD-2198",
+      "amountMinor": 3000000,
+      "currency": "MXN",
+      "usdMinor": 150000,
+      "paidOn": "2026-09-06",
+      "status": "paid",
+      "approvedByHuman": false
+    },
+    {
+      "id": "S-003",
+      "beneficiary": "Quito QA Cía. Ltda.",
+      "reference": "QQ-296",
+      "amountMinor": 120000,
+      "currency": "USD",
+      "usdMinor": 120000,
+      "paidOn": "2026-09-10",
+      "status": "paid",
+      "approvedByHuman": false
+    },
+    {
+      "id": "S-004",
+      "beneficiary": "Pampa Datos SRL",
+      "reference": "PD-0398",
+      "amountMinor": 150000000,
+      "currency": "ARS",
+      "usdMinor": 150000,
+      "paidOn": "2026-09-12",
+      "status": "paid",
+      "approvedByHuman": false
+    },
+    {
+      "id": "S-005",
+      "beneficiary": "Café Andino SAS",
+      "reference": "CA-0063",
+      "amountMinor": 120000000,
+      "currency": "COP",
+      "usdMinor": 30000,
+      "paidOn": "2026-09-14",
+      "status": "paid",
+      "approvedByHuman": false
+    },
+    {
+      "id": "S-006",
+      "beneficiary": "Ñandú Contadores SRL",
+      "reference": "NC-0081",
+      "amountMinor": 90000000,
+      "currency": "ARS",
+      "usdMinor": 90000,
+      "paidOn": "2026-09-20",
+      "status": "paid",
+      "approvedByHuman": false
+    },
+    {
+      "id": "O-001",
+      "beneficiary": "Pampa Datos SRL",
+      "reference": "PD-0412",
+      "amountMinor": 150000000,
+      "currency": "ARS",
+      "usdMinor": 150000,
+      "paidOn": "2026-10-01",
+      "status": "paid",
+      "approvedByHuman": false
+    },
+    {
+      "id": "O-002",
+      "beneficiary": "Café Andino SAS",
+      "reference": "CA-0077",
+      "amountMinor": 120000000,
+      "currency": "COP",
+      "usdMinor": 30000,
+      "paidOn": "2026-10-03",
+      "status": "paid",
+      "approvedByHuman": false
+    },
+    {
+      "id": "O-003",
+      "beneficiary": "Quito QA Cía. Ltda.",
+      "reference": "QQ-310",
+      "amountMinor": 120000,
+      "currency": "USD",
+      "usdMinor": 120000,
+      "paidOn": "2026-10-03",
+      "status": "paid",
+      "approvedByHuman": false
+    }
+  ]
+}
