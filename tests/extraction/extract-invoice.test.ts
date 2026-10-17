@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ExtractionSchema } from "@/contracts/extraction";
-import type { AnthropicClient } from "@/extraction/anthropic-client";
+import { VERIFIER_MODEL, type AnthropicClient } from "@/extraction/anthropic-client";
 import {
   extractInvoice,
   makeUncertainExtraction,
@@ -100,6 +100,80 @@ describe("extractInvoice — success", () => {
     expect(result.ok).toBe(true);
     expect(result.extraction.currency).toMatchObject({ value: null, isUncertain: true });
     expect(await readdir(cacheDir)).toHaveLength(1);
+  });
+});
+
+describe("extractInvoice — verification", () => {
+  function clientWithVerifier(verifierRead: ReaderResponse | Error) {
+    return makeClient(
+      vi.fn().mockImplementation(async (request: { model: string }) => {
+        if (request.model !== VERIFIER_MODEL) return textResponse(JSON.stringify(READER_RESPONSE));
+        if (verifierRead instanceof Error) throw verifierRead;
+        return textResponse(JSON.stringify(verifierRead));
+      }),
+    );
+  }
+
+  it("does not call the verifier unless asked", async () => {
+    const create = vi.fn().mockResolvedValue(textResponse(JSON.stringify(READER_RESPONSE)));
+    await extractInvoice(INPUT, { client: makeClient(create), cacheDir });
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports no verification when the verifier did not run or the file was cached", async () => {
+    const create = vi.fn().mockResolvedValue(textResponse(JSON.stringify(READER_RESPONSE)));
+    const unverified = await extractInvoice(INPUT, { client: makeClient(create), cacheDir });
+    const cached = await extractInvoice(INPUT, { cacheDir, verify: true });
+
+    expect(unverified).toMatchObject({ ok: true, verification: null });
+    expect(cached).toMatchObject({ ok: true, cached: true, verification: null });
+  });
+
+  it("keeps the extraction when the verifier agrees", async () => {
+    const client = clientWithVerifier(READER_RESPONSE);
+    const result = await extractInvoice(INPUT, { client, cacheDir, verify: true });
+
+    expect(result.ok).toBe(true);
+    expect(result.extraction.amountMinor).toMatchObject({ value: 250000, isUncertain: false });
+    expect(result).toMatchObject({ verification: { mismatchedFields: [], verifierError: null } });
+  });
+
+  it("marks a field uncertain, and caches it that way, when the verifier disagrees", async () => {
+    const disagreement = { ...READER_RESPONSE, amountString: field("USD 3,500.00", "3500.00") };
+    const client = clientWithVerifier(disagreement);
+    const result = await extractInvoice(INPUT, { client, cacheDir, verify: true });
+
+    expect(result.extraction.amountMinor).toMatchObject({ value: 250000, isUncertain: true });
+    expect(result).toMatchObject({
+      verification: { mismatchedFields: ["amountMinor"], verifierError: null },
+    });
+    const cached = await extractInvoice(INPUT, { cacheDir });
+    expect(cached).toMatchObject({ ok: true, cached: true });
+    expect(cached.extraction.amountMinor.isUncertain).toBe(true);
+  });
+
+  it("marks the fields uncertain when the verifier call fails", async () => {
+    const client = clientWithVerifier(new Error("API timeout"));
+    const result = await extractInvoice(INPUT, { client, cacheDir, verify: true });
+
+    expect(result.ok).toBe(true);
+    expect(result.extraction.payee.isUncertain).toBe(true);
+    expect(result.extraction.amountMinor.isUncertain).toBe(true);
+    expect(result).toMatchObject({
+      verification: { mismatchedFields: [], verifierError: expect.stringContaining("API timeout") },
+    });
+  });
+
+  it("does not cache the extraction when the verifier call fails, so the next call verifies again", async () => {
+    const failing = clientWithVerifier(new Error("API timeout"));
+    await extractInvoice(INPUT, { client: failing, cacheDir, verify: true });
+    expect(await readdir(cacheDir)).toEqual([]);
+
+    const working = clientWithVerifier(READER_RESPONSE);
+    const result = await extractInvoice(INPUT, { client: working, cacheDir, verify: true });
+    expect(result).toMatchObject({ ok: true, cached: false });
+    expect(result.extraction.amountMinor).toMatchObject({ value: 250000, isUncertain: false });
+    expect(await readdir(cacheDir)).toEqual([`${INPUT.fileHash}.json`]);
   });
 });
 

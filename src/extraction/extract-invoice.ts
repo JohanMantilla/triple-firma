@@ -1,26 +1,30 @@
 import type { Extraction } from "@/contracts/extraction";
-import type { SourceFormat } from "@/contracts/invoice";
 import { makeAnthropicClient, type AnthropicClient } from "./anthropic-client";
 import { readCachedExtraction, writeCachedExtraction } from "./cache";
+import type { ExtractInvoiceInput } from "./extract-invoice-input";
 import { normalizeExtraction } from "./normalize-extraction";
 import { readInvoice, type ReadResult } from "./reader";
+import { verifyExtraction, type VerificationSummary } from "./verify-extraction";
 
-export type ExtractInvoiceInput = {
-  fileHash: string;
-  fileBuffer: Buffer;
-  sourceFormat: SourceFormat;
-  sourceText: string | null;
-};
+export type { ExtractInvoiceInput } from "./extract-invoice-input";
 
 export type ExtractInvoiceOptions = {
   client?: AnthropicClient;
   cacheDir?: string;
+  // Second, independent read with the verifier model; a disagreement makes the field uncertain.
+  verify?: boolean;
 };
 
 // A failed result still carries an extraction, with every field uncertain, so the invoice always
 // reaches the rules engine and R1 escalates it. `reason` is for the audit log.
+// `verification` is null when the verifier did not run in this call (disabled, or served from the cache).
 export type ExtractionResult =
-  | { ok: true; extraction: Extraction; cached: boolean }
+  | {
+      ok: true;
+      extraction: Extraction;
+      cached: boolean;
+      verification: VerificationSummary | null;
+    }
   | { ok: false; extraction: Extraction; reason: string };
 
 const UNCERTAIN_FIELD = { raw: null, value: null, evidence: null, isUncertain: true } as const;
@@ -58,14 +62,27 @@ export async function extractInvoice(
 ): Promise<ExtractionResult> {
   try {
     const cachedExtraction = await readCachedExtraction(input.fileHash, options.cacheDir);
-    if (cachedExtraction) return { ok: true, extraction: cachedExtraction, cached: true };
+    if (cachedExtraction) {
+      return { ok: true, extraction: cachedExtraction, cached: true, verification: null };
+    }
 
-    const read = await readWithRetry(options.client ?? makeAnthropicClient(), input);
+    const client = options.client ?? makeAnthropicClient();
+    const read = await readWithRetry(client, input);
     if (!read.ok) return { ok: false, extraction: makeUncertainExtraction(), reason: read.reason };
 
-    const extraction = normalizeExtraction(read.response);
-    await writeCachedExtraction(input.fileHash, extraction, options.cacheDir);
-    return { ok: true, extraction, cached: false };
+    const normalized = normalizeExtraction(read.response);
+    const verification = options.verify ? await verifyExtraction(client, input, normalized) : null;
+    const extraction = verification?.extraction ?? normalized;
+
+    // A failed verification is a transient problem, so it is not cached: the next call verifies again.
+    if (verification?.verifierError == null) {
+      await writeCachedExtraction(input.fileHash, extraction, options.cacheDir);
+    }
+    const summary = verification && {
+      mismatchedFields: verification.mismatchedFields,
+      verifierError: verification.verifierError,
+    };
+    return { ok: true, extraction, cached: false, verification: summary };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     return {
