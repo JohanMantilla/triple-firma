@@ -73,6 +73,7 @@ export function buildExtraction(): Extraction {
     },
     lineItemsSumMinor: 250_000,
     taxMinor: null,
+    lineItemAmountsMinor: null,
     suspiciousText: [],
   };
 }
