@@ -37,4 +37,18 @@ export const MESSAGES = {
     withinThreshold: (amount: string, threshold: string) =>
       `R5: ${amount} no supera el umbral de aprobación de ${threshold}.`,
   },
+
+  currency: {
+    unreadable: "R8: no se pudo determinar la moneda con certeza; se escala por seguridad.",
+    unsupported: (currency: string) =>
+      `R8: la moneda ${currency} no está soportada (solo USD, COP, MXN y ARS).`,
+    withoutRate: (currency: string) =>
+      `R8: la moneda ${currency} no tiene una tasa de cambio configurada.`,
+    conversionFailed: (currency: string) =>
+      `R8: no se pudo convertir el monto en ${currency}; se escala por seguridad.`,
+    supported: (currency: string, rate: string) =>
+      `R8: la moneda ${currency} está soportada, con tasa fija ${rate} por USD.`,
+    converted: (currency: string, rate: string, baseAmount: string) =>
+      `R8: ${currency} convertido con la tasa fija ${rate} por USD: ${baseAmount}.`,
+  },
 };
