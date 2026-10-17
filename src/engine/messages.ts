@@ -98,6 +98,22 @@ export const MESSAGES = {
       `R4: cobra ${charged}, conforme a lo acordado con “${payee}” (${agreed}, tolerancia ${tolerance}).`,
   },
 
+  duplicate: {
+    sameFile: (invoiceId: string) =>
+      `R2: este mismo archivo ya se procesó como la factura ${invoiceId}.`,
+    unreadable: (labels: string) =>
+      `R2: no se puede verificar si es duplicada porque no se pudo leer con certeza: ${labels}.`,
+    exact: (reference: string, payee: string, amount: string, date: string) =>
+      `R2: ya se registró la factura ${quoteUntrusted(reference)} de ${quoteUntrusted(payee)} por ${amount} el ${date}.`,
+    near: (pastReference: string, reference: string) =>
+      `R2: posible duplicado de la factura ${quoteUntrusted(pastReference)} (esta factura: ${quoteUntrusted(reference)}); requiere revisión humana.`,
+    previouslyResolved: (reference: string | null, isRejected: boolean, date: string) =>
+      `R2: coincide con ${reference === null ? "una factura" : `la factura ${quoteUntrusted(reference)}`}, que fue ${isRejected ? "rechazada" : "frenada"} el ${date}; requiere revisión humana.`,
+    unreadableReference: (payee: string, amount: string) =>
+      `R2: posible duplicado de una factura de ${quoteUntrusted(payee)} por ${amount}; una de las referencias no se pudo leer; requiere revisión humana.`,
+    none: "R2: no hay facturas anteriores iguales ni parecidas.",
+  },
+
   budget: {
     missingBaseAmount: (baseCurrency: string) =>
       `R6: no se pudo calcular el monto en ${baseCurrency} para compararlo con el presupuesto; se escala por seguridad.`,

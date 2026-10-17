@@ -13,6 +13,7 @@ import { buildRuleContext, type RuleContext, type RuleContextInput } from "./rul
 import { evaluateAgreementRule } from "./rules/agreement-rule";
 import { evaluateBudgetRule } from "./rules/budget-rule";
 import { evaluateCurrencyRule } from "./rules/currency-rule";
+import { evaluateDuplicateRule } from "./rules/duplicate-rule";
 import { evaluateDueDateRule } from "./rules/due-date-rule";
 import { evaluateExtractionRule } from "./rules/extraction-rule";
 import { evaluatePayeeRule } from "./rules/payee-rule";
@@ -24,7 +25,7 @@ export type RuleEvaluator = (ctx: RuleContext) => RuleResult;
 // Each placeholder is replaced by its real rule in its own PR; until then it escalates (fail-safe).
 const RULES: Record<RuleId, RuleEvaluator> = {
   R1: evaluateExtractionRule,
-  R2: notImplemented("R2"),
+  R2: evaluateDuplicateRule,
   R3: evaluatePayeeRule,
   R4: evaluateAgreementRule,
   R5: evaluatePaymentLimitRule,
