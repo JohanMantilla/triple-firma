@@ -125,6 +125,51 @@ describe("evaluateExtractionRule (R1)", () => {
     expect(evaluate(buildInvoice({ sourceFormat: "PDF", sourceText: null })).outcome).toBe("PASS");
   });
 
+  it.each(FIELDS)("escalates when %s has no value even if not marked uncertain", (field) => {
+    expect(evaluate(withField(field, { value: null, isUncertain: false }))).toMatchObject({
+      outcome: "ESCALATE",
+      compared: { unreadable: field },
+    });
+  });
+
+  it("records the raw text of an unreadable field and the evidence of a contradicted one", () => {
+    const invoice = withField("reference", { isUncertain: true });
+    invoice.extraction.payee = { ...invoice.extraction.payee, evidence: "From: Shady LLC" };
+    expect(evaluate(invoice).compared).toMatchObject({
+      referenceRaw: "INV-102",
+      payeeEvidence: "From: Shady LLC",
+    });
+  });
+
+  it("records the evidence that is missing from the original text", () => {
+    const invoice = buildInvoice({
+      sourceFormat: "EMAIL",
+      sourceText: EMAIL_TEXT.replace("2,500.00", "25.00"),
+    });
+    expect(evaluate(invoice).compared).toMatchObject({
+      amountMinorEvidence: "Total: USD 2,500.00",
+    });
+  });
+
+  it("checks a chat the same way as an email", () => {
+    const passing = buildInvoice({ sourceFormat: "CHAT", sourceText: EMAIL_TEXT });
+    const failing = buildInvoice({ sourceFormat: "CHAT", sourceText: "hola, te envío la cuenta" });
+    expect(evaluate(passing).outcome).toBe("PASS");
+    expect(evaluate(failing).outcome).toBe("ESCALATE");
+  });
+
+  it("finds evidence through invisible and full-width characters in the original text", () => {
+    const sourceText = EMAIL_TEXT.replace("Dev Partners", "Dev\u200B Partners").replace(
+      "2,500.00",
+      "\uFF12,500.00",
+    );
+    expect(evaluate(buildInvoice({ sourceFormat: "EMAIL", sourceText })).outcome).toBe("PASS");
+  });
+
+  it("treats a blank original text like a PDF without text", () => {
+    expect(evaluate(buildInvoice({ sourceFormat: "PDF", sourceText: "  " })).outcome).toBe("PASS");
+  });
+
   it("lists every problem in one message", () => {
     const invoice = withField("reference", { isUncertain: true });
     invoice.extraction.payee = { ...invoice.extraction.payee, evidence: null };

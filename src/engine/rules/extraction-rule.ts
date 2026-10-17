@@ -18,7 +18,10 @@ type RequiredField = (typeof REQUIRED_FIELDS)[number];
 // also appear in it. All checks are deterministic: the reader's output is never trusted as is.
 export function evaluateExtractionRule(ctx: RuleContext): RuleResult {
   const { extraction, sourceText } = ctx.invoice;
-  const searchableSource = sourceText === null ? null : normalizeForSearch(sourceText);
+  // A blank original text gives nothing to search, so it is treated like a PDF without text.
+  const searchableSource =
+    sourceText === null || sourceText.trim() === "" ? null : normalizeForSearch(sourceText);
+  const details: Record<string, string | null> = {};
 
   const unreadable: RequiredField[] = [];
   const withoutEvidence: RequiredField[] = [];
@@ -26,18 +29,21 @@ export function evaluateExtractionRule(ctx: RuleContext): RuleResult {
   const evidenceNotInSource: RequiredField[] = [];
 
   for (const field of REQUIRED_FIELDS) {
-    const { value, isUncertain, evidence } = extraction[field] as Extraction[RequiredField];
+    const { value, raw, isUncertain, evidence } = extraction[field];
     if (value === null || isUncertain) {
       unreadable.push(field);
+      details[`${field}Raw`] = raw;
     } else if (evidence === null || evidence.trim() === "") {
       withoutEvidence.push(field);
     } else if (!isValueSupported(extraction, field, evidence)) {
       valueNotSupported.push(field);
+      details[`${field}Evidence`] = evidence;
     } else if (
       searchableSource !== null &&
       !searchableSource.includes(normalizeForSearch(evidence))
     ) {
       evidenceNotInSource.push(field);
+      details[`${field}Evidence`] = evidence;
     }
   }
 
@@ -46,6 +52,7 @@ export function evaluateExtractionRule(ctx: RuleContext): RuleResult {
     withoutEvidence: withoutEvidence.join(","),
     valueNotSupported: valueNotSupported.join(","),
     evidenceNotInSource: evidenceNotInSource.join(","),
+    ...details,
   };
   const reasons = [
     unreadable.length > 0 && MESSAGES.extraction.unreadable(labelsOf(unreadable)),
