@@ -39,6 +39,36 @@ const eslintConfig = defineConfig([
     ],
     "engine/ is pure: it may only depend on contracts/.",
   ),
+  {
+    // The engine is deterministic: the current time is always injected as `now`.
+    files: ["src/engine/**"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "CallExpression[callee.object.name='Date'][callee.property.name='now']",
+          message: "engine/ never reads the clock: use the injected `now`.",
+        },
+        {
+          selector: "NewExpression[callee.name='Date'][arguments.length=0]",
+          message: "engine/ never reads the clock: use the injected `now`.",
+        },
+        {
+          selector: "CallExpression[callee.name='Date']",
+          message: "engine/ never reads the clock: use the injected `now`.",
+        },
+        {
+          selector: "CallExpression[callee.object.name='performance'][callee.property.name='now']",
+          message: "engine/ never reads the clock: use the injected `now`.",
+        },
+        {
+          selector:
+            "CallExpression[callee.property.name=/^(format|formatToParts)$/][arguments.length=0]",
+          message: "engine/ never reads the clock: pass the injected `now` to the formatter.",
+        },
+      ],
+    },
+  },
   forbidImports(
     ["src/extraction/**"],
     [
