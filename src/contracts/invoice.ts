@@ -13,7 +13,7 @@ const TEXT_SOURCE_FORMATS: readonly SourceFormat[] = ["EMAIL", "CHAT"];
 
 // sourceText is the original text read straight from the file, never written by the LLM, so R10 can
 // scan it deterministically even if a prompt injection hides itself from the reader's suspiciousText.
-// It is mandatory for emails and chats; PDFs and images may leave it null.
+// It is mandatory and non-empty for emails and chats; PDFs and images may leave it null.
 export const InvoiceSchema = z
   .object({
     id: z.string().min(1),
@@ -24,7 +24,9 @@ export const InvoiceSchema = z
     extraction: ExtractionSchema,
   })
   .refine(
-    (invoice) => !TEXT_SOURCE_FORMATS.includes(invoice.sourceFormat) || invoice.sourceText !== null,
-    { message: "Emails and chats must include their source text", path: ["sourceText"] },
+    (invoice) =>
+      !TEXT_SOURCE_FORMATS.includes(invoice.sourceFormat) ||
+      (invoice.sourceText !== null && invoice.sourceText.trim().length > 0),
+    { message: "Emails and chats must include non-empty source text", path: ["sourceText"] },
   );
 export type Invoice = z.infer<typeof InvoiceSchema>;

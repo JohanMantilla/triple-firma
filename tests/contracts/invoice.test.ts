@@ -28,6 +28,14 @@ describe("InvoiceSchema", () => {
     },
   );
 
+  it.each([
+    ["EMAIL", ""],
+    ["EMAIL", "  \n\t "],
+    ["CHAT", ""],
+  ])("rejects a %s with empty source text %j", (sourceFormat, sourceText) => {
+    expect(InvoiceSchema.safeParse({ ...invoice, sourceFormat, sourceText }).success).toBe(false);
+  });
+
   it("rejects an invoice that omits sourceText instead of setting it to null", () => {
     const { sourceText: _omitted, ...withoutText } = invoice;
     expect(InvoiceSchema.safeParse(withoutText).success).toBe(false);
