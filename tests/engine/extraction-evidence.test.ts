@@ -56,6 +56,9 @@ describe("isAmountSupported", () => {
     [250_000, "Total 2 500,00"],
     [250_000, "Total\u00A02\u202F500,00 COP"],
     [250_000, "Total: USD2,500.00"],
+    [250_000, "Total USD 2,500.00"],
+    [250_000, "Total: $2,500.00"],
+    [250_000, "Pagar 2.500,00 €"],
     [250_000, "Total 2,500.00 vence 30/10/2026"],
   ])("supports %i with %j", (amountMinor, evidence) => {
     expect(isAmountSupported(amountMinor, evidence)).toBe(true);
@@ -75,6 +78,11 @@ describe("isAmountSupported", () => {
     [3_000, "Total 25,000.00 vence 30/10/2026"],
     [1_900, "Total 25,000.00 IVA 19%"],
     [10_200, "Factura INV-102 por 25,000.00"],
+    [250_000, "Total: -$2,500.00"],
+    [250_000, "Nota crédito ($2,500.00)"],
+    [250_000, "Saldo (USD 2,500.00)"],
+    [250_000, "Total: -USD 2,500.00"],
+    [250_000, "Total: - US$ 2,500.00"],
     [25_000, "Total 2 50"],
   ])("does not support %i with %j", (amountMinor, evidence) => {
     expect(isAmountSupported(amountMinor, evidence)).toBe(false);
@@ -95,6 +103,7 @@ describe("isCurrencySupported", () => {
     ["COP", "Total USD 2,500.00"],
     ["USD", "Total $ 2,500.00"],
     ["USD", "Total USDT 2,500.00"],
+    ["USD", "Total AUS$ 2,500.00"],
     ["MXN", "Total 2,500.00"],
   ])("does not support %s with %j", (currency, evidence) => {
     expect(isCurrencySupported(currency, evidence)).toBe(false);

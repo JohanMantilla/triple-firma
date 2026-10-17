@@ -106,6 +106,13 @@ describe("evaluateExtractionRule (R1)", () => {
     });
   });
 
+  it.each(["Total: -$2,500.00", "Nota crédito (USD 2,500.00)"])(
+    "escalates a credit note written as %j",
+    (evidence) => {
+      expect(evaluate(withField("amountMinor", { evidence })).outcome).toBe("ESCALATE");
+    },
+  );
+
   it("escalates an amount supported only by a date in its evidence", () => {
     const invoice = withField("amountMinor", {
       value: 3_000,

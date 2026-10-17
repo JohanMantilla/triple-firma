@@ -52,8 +52,12 @@ export function isAmountSupported(amountMinor: number, evidence: string): boolea
 // Digits with "." or "," inside, or a space followed by exactly three digits (thousands grouping).
 const AMOUNT_PATTERN = /\d(?:[\d.,]| (?=\d{3}(?!\d)))*\d|\d/g;
 
+const CURRENCY_MARKER_AT_END = /(?:[A-Za-z]{0,3}\$|[A-Za-z]{3}|[€£¥])$/;
+
 function isSignedOrPartOfOtherNumber(text: string, start: number, end: number): boolean {
-  const before = text.slice(0, start).trimEnd().at(-1) ?? "";
+  // Skip a currency symbol or code between the sign and the digits: "-$2,500.00", "(USD 2,500.00)".
+  const prefix = text.slice(0, start).trimEnd().replace(CURRENCY_MARKER_AT_END, "").trimEnd();
+  const before = prefix.at(-1) ?? "";
   const touchingBefore = text[start - 1] ?? "";
   const touchingAfter = text[end] ?? "";
   const isSigned = /^[\p{Pd}\u2212(]$/u.test(before);
@@ -65,7 +69,7 @@ function isSignedOrPartOfOtherNumber(text: string, start: number, end: number): 
 // "$" is ambiguous (Colombia, Mexico and Argentina use it too), so it does not support any currency.
 export function isCurrencySupported(currency: string, evidence: string): boolean {
   const text = evidence.normalize("NFKC").toUpperCase();
-  if (currency === "USD" && text.includes("US$")) return true;
+  if (currency === "USD" && /(^|[^A-Z])US\$/.test(text)) return true;
   return new RegExp(`(^|[^A-Z])${currency}([^A-Z]|$)`).test(text);
 }
 
