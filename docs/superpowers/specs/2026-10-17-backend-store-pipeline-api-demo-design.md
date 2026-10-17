@@ -23,14 +23,14 @@ Without them:
 |---|---|
 | Finance operator | Upload an invoice and see PAY / BLOCK / ESCALATE with its explanation in seconds |
 | Approver | An inbox of pending escalations; approve or reject with a comment; approving revalidates |
-| Jury | `npm run demo` from a clean clone, offline; a tamper demo that the integrity check detects |
+| Jury | `npm run demo` from a clean clone, with no API key (extractions come from the cache); a tamper demo that the integrity check detects |
 | D (frontend) | A stable HTTP API whose responses are `contracts/` schemas, so mocks and real data match |
 | C (data and eval) | Reusable pipeline functions and one metrics formula for `npm run eval` |
 | A, B | A pipeline that calls their functions exactly as agreed and never bypasses them |
 
 ### Goals
 
-1. Persist every invoice, decision, approval and config version in libSQL (local file, Turso on deploy).
+1. Persist every invoice, decision, approval and config version in Turso (libSQL), in development, in the demo and on deploy.
 2. Orchestrate one invoice end to end: hash → extraction (B) → engine (A) → decision plus audit entry, idempotent by file hash.
 3. Resolve escalations through A's revalidation, with no budget race and no double approval.
 4. Keep an append-only audit log with a SHA-256 hash chain and a verification endpoint.
@@ -49,7 +49,7 @@ Without them:
 ### Success metrics
 
 - 0 leaks: E's code paths can never produce PAY on their own, and `npm run eval` fails CI on any leak.
-- `npm run demo` works from a clean clone with no API key and no network.
+- `npm run demo` works from a clean clone with no API key: it needs only the developer's Turso credentials. With no network, the same command runs against a local file (Plan B, see "Database: Turso everywhere").
 - Reprocessing the same file returns the same decision and writes no second audit entry.
 - `npm run demo:tamper` is detected by `GET /api/audit/verify`.
 - `npm run lint`, `typecheck`, `test` and `build` stay green on every PR.
@@ -78,12 +78,46 @@ Without them:
 | Clock | Batch, demo, eval and CI use a fixed `DATASET_NOW` agreed with C; UI uploads use the real clock |
 | Approval revalidation | A ships a fail-safe `revalidateApproval` placeholder now; E integrates against its signature |
 | Storage model | Contract documents in rows (see below) |
+| Database | Turso in every environment that runs the app: one database per developer, plus a shared `triple-firma-demo` for the presentation and Vercel. Tests and eval use in-memory libSQL. |
 
 ### Storage approach
 
 1. **Contract documents in rows (chosen).** Each row stores the validated contract object as JSON, and has columns only where the database must enforce something: `file_hash UNIQUE`, `invoice_id UNIQUE`, one approval per decision. Every read goes back through `<Name>Schema.parse`. It is little code, and it survives contract changes: `issueDate` landed as `feat(contracts)!` and needs no migration here.
 2. Fully normalized columns. Rejected: about 30 snake_case columns, and a migration on every contract change.
 3. Event sourcing with the audit log as the only state. Rejected: approvals and history become replays, too much for the time budget.
+
+### Database: Turso everywhere
+
+**Why:** development runs on the same database engine and network path as the deploy. Remote transactions, latency and auth problems show up from the first day, not on Saturday at 1 pm. Seeding the demo database is just `npm run demo` with that database's credentials.
+
+**One database per developer.** `npm run demo` resets the database in `TURSO_DATABASE_URL`. A shared development database would let one person's demo wipe everyone else's data.
+
+| Database | Used by | Reset by |
+|---|---|---|
+| `triple-firma-<name>` | each developer running the backend (`npm run dev`, `npm run demo`) | its owner, with `npm run demo` |
+| `triple-firma-demo` | the presentation and Vercel | E only, with `npm run demo` pointed at it |
+| `:memory:` | `npm test` and `npm run eval` (local and CI) | every run starts empty |
+
+Tests and eval stay in memory: CI then needs no secrets and no network, and every run starts from an empty database.
+
+**Developer setup** (E documents it in the README, in Spanish):
+1. Install the Turso CLI and log in.
+2. Create the database: `turso db create triple-firma-<name>`.
+3. Put `turso db show triple-firma-<name> --url` in `TURSO_DATABASE_URL`, and `turso db tokens create triple-firma-<name>` in `TURSO_AUTH_TOKEN`, both in `.env.local`.
+
+D works with mocks (`NEXT_PUBLIC_USE_MOCK_API=true`), so D needs Turso only to try the real API.
+
+**Configuration:**
+- `.env.example` leaves `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` empty, with a comment pointing to the README.
+- `openDb()` with no URL and no `TURSO_DATABASE_URL` throws `TURSO_DATABASE_URL is not set: see README`. There is no silent fallback to a local file.
+- The `next build` in CI runs without these variables. It never opens the database, because every `GET` handler calls `connection()` first and `getDb()` is only called at request time.
+
+**Plan B, offline:** `TURSO_DATABASE_URL=file:local.db` still works with no code change, because `@libsql/client` takes both URL kinds. It is the fallback if Turso or the network fails during the presentation (PROPUESTA §6.1, Plan B).
+
+**Remote transactions:**
+- `transaction("write")` on Turso opens an interactive transaction over a WebSocket. The server queues concurrent write transactions, so they still run one at a time.
+- Each statement is one network round trip. Transactions only contain short reads and writes; the LLM call always runs before the transaction opens.
+- A sequential batch of about 36 invoices takes seconds, not minutes. That is acceptable for `npm run demo`.
 
 ### Module map
 
@@ -181,9 +215,9 @@ CREATE TRIGGER IF NOT EXISTS audit_entries_no_delete BEFORE DELETE ON audit_entr
   BEGIN SELECT RAISE(ABORT, 'audit_entries is append-only'); END;
 ```
 
-- **`openDb(url = TURSO_DATABASE_URL ?? "file:local.db")`** creates the client with `authToken: TURSO_AUTH_TOKEN` and `timeout: 5000`. The timeout is the busy timeout for local files: without it, a second write transaction fails at once with `SQLITE_BUSY` instead of waiting. It then runs `SCHEMA` with `executeMultiple`, which is idempotent.
+- **`openDb(url = TURSO_DATABASE_URL)`** throws when no URL is given (see "Database: Turso everywhere"). It creates the client with `authToken: TURSO_AUTH_TOKEN` and `timeout: 5000`. The timeout applies only to the `file:` fallback, where it is the busy timeout: without it, a second write transaction fails at once with `SQLITE_BUSY` instead of waiting. Turso ignores it. It then runs `SCHEMA` with `executeMultiple`, which is idempotent.
 - **`getDb()`** memoizes `openDb()` on `globalThis`, so dev hot reload does not open a client per reload.
-- **`resetDb(db)`** drops the triggers and tables and re-runs `SCHEMA`. It works the same for the local file and Turso.
+- **`resetDb(db)`** drops the triggers and tables and re-runs `SCHEMA`. It works the same on Turso and on the `file:` fallback.
 - **Invoice ids** are `randomUUID()`. Decision ids are created by the engine (`decision-<invoiceId>`).
 
 ### History and status
@@ -361,14 +395,12 @@ A rate is `null` when its denominator is 0.
 
 **`scripts/demo.ts`:**
 1. Without `--live`, run `delete process.env.ANTHROPIC_API_KEY`. A cache miss then becomes an uncertain extraction (and escalates) instead of spending tokens. The Anthropic client is only created on a cache miss, so cached invoices are unaffected.
-2. `openDb()`, then `resetDb`.
+2. `openDb()`, then `resetDb`. This resets the database in `TURSO_DATABASE_URL`, so it must be your own (or `triple-firma-demo`, for E only).
 3. `saveRulesConfig(readCompanyConfig(), DATASET_NOW)`.
 4. `processInvoiceSet` for `dev`, then `adversarial`, printing one line per file: file name, outcome, and whether it came from cache or failed.
 5. Print the PAY / BLOCK / ESCALATE counts and the `verifyAuditChain` result, then the URL `http://localhost:3000`. The browser is not opened automatically: there is no single cross-platform way.
 
-The dev server must be stopped before running the demo.
-
-**`--live` (`npm run demo:live`)** keeps the key. B's extractor reads through the cache: on a miss it calls the model and writes `data/cache/<sha256>.json`. Those files are committed, so everyone else can run `npm run demo` offline. To force a fresh read, delete the cache file.
+**`--live` (`npm run demo:live`)** keeps the key. B's extractor reads through the cache: on a miss it calls the model and writes `data/cache/<sha256>.json`. Those files are committed, so everyone else can run `npm run demo` without an API key. To force a fresh read, delete the cache file.
 
 **`scripts/demo-tamper.ts`:**
 1. Drop the `audit_entries_no_update` trigger.
@@ -424,7 +456,7 @@ Route handlers stay thin and are checked manually with `curl` (see Verification)
 One PR each, on a branch named `<type>/<scope>-<topic>`.
 
 1. `feat(contracts): add api response schemas`. This unblocks D's mocks; it needs A, a second reviewer and the `rules-auditor`.
-2. `feat(store): add libsql schema and repositories`
+2. `feat(store): add libsql schema and repositories`. The same PR updates `.env.example`, `CLAUDE.md` ("Getting started": the database is no longer a local file) and the README setup steps for Turso.
 3. `feat(store): add append-only audit log with sha256 hash chain`. The contract already requires `hash`, so the chain cannot wait for P1.
 4. `feat(pipeline): add invoice processing pipeline`, after B merges.
 5. `feat(api): add invoice, decision and config endpoints`
@@ -433,17 +465,19 @@ One PR each, on a branch named `<type>/<scope>-<topic>`.
 8. `feat(scripts): add demo, demo:live and demo:tamper commands`
 9. P1: `feat(api): serve original invoice files`, `ci: run eval on every push`, and `docs: add readme with setup, demo and metrics` (Spanish).
 10. P2:
-    - **Vercel + Turso:**
-      - set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in Vercel;
+    - **Vercel:**
+      - point it at `triple-firma-demo` by setting `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in Vercel;
       - add `serverExternalPackages: ["@libsql/client"]` if bundling fails;
       - add `outputFileTracingIncludes` for `data/expected.csv` and `data/cache`;
-      - seed from local with `TURSO_DATABASE_URL=libsql://… npx tsx scripts/demo.ts`.
+      - seed by running `npx tsx --env-file=<demo env file> scripts/demo.ts` locally.
     - **MCP server:** cut first.
 
 ### Verification
 
 - `npm run lint` passes the dependency rule; `npm run typecheck`, `npm test` and `npm run build` pass (build touches no database).
-- With no API key, `npm run demo` prints the counts and a valid chain, and the UI lists the decisions.
+- With no API key, `npm run demo` against your own Turso database prints the counts and a valid chain, and the UI lists the decisions. Reloading after an approval shows it still resolved.
+- Plan B: with `TURSO_DATABASE_URL=file:local.db`, the same `npm run demo` works with no network.
+- Without `TURSO_DATABASE_URL`, `npm run dev` starts, and any API call answers 500 with `TURSO_DATABASE_URL is not set: see README`. `npm run build` passes without it.
 - Upload twice with `curl -F file=@data/invoices/dev/<file> localhost:3000/api/invoices`: the second call answers 200 with the same `decision.id`.
 - Approve with `curl -X POST localhost:3000/api/approvals/<id> -H 'content-type: application/json' -d '{"action":"APPROVE","approver":"Ana","comment":"ok"}'`. A second identical call answers 409.
 - After `npm run demo:tamper`, `GET /api/audit/verify` answers `isValid: false` with the altered `seq`.
