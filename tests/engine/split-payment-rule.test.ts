@@ -18,6 +18,7 @@ type Scenario = {
   currency?: string;
   history?: HistoryEntry[];
   config?: Partial<RulesConfig>;
+  now?: string;
 };
 
 function buildContext(scenario: Scenario = {}) {
@@ -34,7 +35,7 @@ function buildContext(scenario: Scenario = {}) {
     invoice,
     config: buildRulesConfig(scenario.config),
     history: scenario.history ?? [],
-    now: NOW,
+    now: scenario.now ?? NOW,
   });
 }
 
@@ -158,6 +159,29 @@ describe("evaluateSplitPaymentRule (R7)", () => {
       expect(evaluate({ history: [earlier(100_001, { decidedAt })] })).toMatchObject({
         outcome: "PASS",
         compared: { earlierCount: 0 },
+      });
+    });
+
+    // 2026-11-03 10:00 in New York, two days after daylight saving time ended: the window starts on
+    // 2026-10-28, still in daylight time, whose first minute is 04:00 UTC instead of 05:00.
+    const AFTER_DST = "2026-11-03T15:00:00Z";
+
+    it.each([
+      ["the first minute of the first day", "2026-10-28T04:00:00Z", "ESCALATE"],
+      ["the last minute before the window", "2026-10-28T03:59:00Z", "PASS"],
+    ])(
+      "counts the window across the end of daylight saving time: %s",
+      (_case, decidedAt, outcome) => {
+        const history = [earlier(100_001, { decidedAt, period: "2026-10" })];
+        expect(evaluate({ history, now: AFTER_DST }).outcome).toBe(outcome);
+      },
+    );
+
+    it("counts a payment of the previous month inside the window, unlike the budget period", () => {
+      const lastMonth = earlier(100_001, { decidedAt: "2026-10-30T14:00:00Z", period: "2026-10" });
+      expect(evaluate({ history: [lastMonth], now: AFTER_DST })).toMatchObject({
+        outcome: "ESCALATE",
+        compared: { today: "2026-11-03", earlierSumMinor: 100_001 },
       });
     });
 
