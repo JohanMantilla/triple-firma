@@ -89,7 +89,7 @@ Configuración editable desde la pantalla. **Una regla sin configurar nunca pasa
 |---|---|---|---|
 | **R1 Extracción completa** | Falta un campo obligatorio, hay un campo con `isUncertain`, el esquema es inválido o no hay evidencia | ESCALAR | "No se pudo leer con certeza el monto." |
 | **R2 Duplicado** | Exacto: mismo beneficiario (`normalizePayee`), monto, moneda y referencia (`normalizeReference`, que ignora mayúsculas, espacios, guiones, barras y puntos) ya pagada o pendiente | FRENAR | "Ya se pagó la factura FAC-102 de Café Andino (COP 4.500.000) el 03/10." |
-| | Casi duplicado: la referencia difiere en un carácter o en ceros a la izquierda ("FAC-102" vs "FAC-103" o "FAC-0102") con el mismo beneficiario y monto | ESCALAR | "Posible duplicado de FAC-102, requiere revisión." |
+| | Casi duplicado: mismo beneficiario, monto y moneda, y la referencia normalizada está **a un carácter de distancia** (cambiado, agregado o quitado: "FAC-102" vs "FAC-103" o "FAC-102A") o es **igual al quitar los ceros a la izquierda** de sus números ("FAC-102" vs "FAC-00102") | ESCALAR | "Posible duplicado de FAC-102, requiere revisión." |
 |                                | Coincide con una factura que antes fue **rechazada** por una persona o **frenada** (aunque sea otro archivo)       | ESCALAR | "Esta factura coincide con FAC-102, que fue rechazada el 03/10; requiere revisión." |
 | | Si una factura del historial (o la nueva) tiene beneficiario o referencia ilegible, se compara con los campos que sí se leyeron (beneficiario, monto y moneda); si coinciden, es casi duplicado | ESCALAR | "Posible duplicado de una factura de Dev Partners SAS por USD 1.500 cuya referencia no se pudo leer; requiere revisión." |
 | **R3 Beneficiario** (se evalúa **en este orden**, y la primera condición que se cumple decide) | 1. Coincidencia exacta con un beneficiario **bloqueado** | FRENAR | "Old Vendor LLC está bloqueado por la empresa." |
@@ -343,7 +343,7 @@ triple-firma/
 │   └── cache/                 # extracciones cacheadas por hash
 ├── src/
 │   │   # ── COMPARTIDO ──
-│   ├── contracts/   ← A     # esquemas Zod: ExtractedInvoice, RulesConfig, Decision, AuditEntry, Approval
+│   ├── contracts/   ← A     # esquemas Zod: Extraction, Invoice, RulesConfig, HistoryEntry, Decision, Approval, AuditEntry
 │   │   # ── FRONTEND (D) ──
 │   ├── app/         ← D     # pantallas: rules/, decisions/, inbox/ (sin lógica de negocio)
 │   ├── components/  ← D     # tablas, badges, formularios, detalle por regla
@@ -387,13 +387,13 @@ Los contratos ya están en `src/contracts/` (uno por concepto, Zod 4) y son la f
 | `money.ts` | `CurrencyCodeSchema`, `SupportedCurrencySchema`, `ExchangeRateSchema`, `MinorAmountSchema` | Montos enteros; tasas como texto decimal positivo, nunca `number`; la configuración solo admite USD, COP, MXN y ARS (todas con 2 decimales) |
 | `dates.ts` | `IsoDateSchema`, `IsoDateTimeSchema`, `PeriodSchema`, `TimezoneSchema` | Fechas guardadas siempre en UTC; periodo `AAAA-MM`; zona horaria IANA válida |
 | `payee.ts` | `normalizePayee`, `PayeeNameSchema` | Una sola forma de comparar nombres, usada por la configuración y por R3: ignora mayúsculas, espacios, caracteres invisibles, puntos y comas; conserva tildes, otros alfabetos y signos como `&` o `-` |
-| `reference.ts` | `normalizeReference`, `ReferenceSchema` | Una sola forma de comparar referencias para R2 (mayúsculas, espacios, guiones, barras, puntos y caracteres invisibles): "FAC-102" y "fac 102" son la misma |
+| `reference.ts` | `normalizeReference`, `ReferenceSchema` | Una sola forma de comparar referencias para R2: ignora mayúsculas, espacios, caracteres invisibles y los separadores `-` (y cualquier guion Unicode o signo menos), `_`, `.`, `/`, `#` y `:`. "FAC-102", "fac 102" y "FAC–102" son la misma |
 | `extraction.ts` | `ExtractionSchema` | Cada campo con `raw`, `value`, `evidence` e `isUncertain`; monto positivo (0 o negativo queda incierto y R1 escala) |
 | `invoice.ts` | `InvoiceSchema` | Hash SHA-256 del archivo, formato de origen y `sourceText` (obligatorio en correos y chats) para que R10 no dependa solo del LLM |
 | `rules-config.ts` | `RulesConfigSchema`, `AgreementSchema` | Todos los campos obligatorios; la moneda base con tasa 1; tope mayor que el umbral; nadie permitido y bloqueado a la vez; sin acuerdos solapados para un mismo beneficiario |
-| `history.ts` | `HistoryEntrySchema`, `isCountedInBudget` | Guarda tasa, `baseAmountMinor` y `period` de cada pago o escalada pendiente; conserva rechazadas y frenadas para R2 |
+| `history.ts` | `HistoryEntrySchema`, `isCountedInBudget` | Guarda todas las facturas, aunque tengan campos ilegibles; `PAYABLE` exige todos los datos de dinero; una pendiente reserva su `baseAmountMinor` solo si se conoce; guarda tasa y `period`; conserva rechazadas y frenadas para R2 |
 | `decision.ts` | `DecisionSchema`, `RuleResultSchema`, `combineRuleOutcomes` | R1 a R10 evaluadas exactamente una vez; la decisión es la más restrictiva; PAGAR siempre registra monto, moneda, monto en USD y tasa |
-| `approval.ts` | `ApprovalRequestSchema`, `ApprovalSchema` | Comentario obligatorio; rechazar termina en FRENAR; aprobar solo paga si la revalidación pasó |
+| `approval.ts` | `ApprovalRequestSchema`, `ApprovalSchema`, `REVALIDATED_RULE_IDS` | Comentario obligatorio; rechazar termina en FRENAR sin revalidar; aprobar revalida exactamente R2 y R6 y solo paga si ambas pasan, con monto, moneda soportada, tasa y monto en USD obligatorios |
 | `audit-entry.ts` | `AuditEntrySchema` | Solo la primera entrada no tiene `prevHash` |
 
 ### 6.5 Consistencia de nombres entre todos
