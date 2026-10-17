@@ -19,12 +19,14 @@ export const VERIFIED_FIELDS = [
 ] as const;
 export type VerifiedField = (typeof VERIFIED_FIELDS)[number];
 
-export type VerificationResult = {
-  extraction: Extraction;
+// What the second read found, for the audit log.
+export type VerificationSummary = {
   mismatchedFields: VerifiedField[];
   // Set when the second read failed. Every verified field is then uncertain: unchecked is not trusted.
   verifierError: string | null;
 };
+
+export type VerificationResult = VerificationSummary & { extraction: Extraction };
 
 // Fields are compared the way the engine compares them, so "Corp." and "Corp" agree.
 const COMPARE_KEY: Record<VerifiedField, (value: string | number) => string | number> = {

@@ -4,7 +4,7 @@ import { readCachedExtraction, writeCachedExtraction } from "./cache";
 import type { ExtractInvoiceInput } from "./extract-invoice-input";
 import { normalizeExtraction } from "./normalize-extraction";
 import { readInvoice, type ReadResult } from "./reader";
-import { verifyExtraction } from "./verify-extraction";
+import { verifyExtraction, type VerificationSummary } from "./verify-extraction";
 
 export type { ExtractInvoiceInput } from "./extract-invoice-input";
 
@@ -17,8 +17,14 @@ export type ExtractInvoiceOptions = {
 
 // A failed result still carries an extraction, with every field uncertain, so the invoice always
 // reaches the rules engine and R1 escalates it. `reason` is for the audit log.
+// `verification` is null when the verifier did not run in this call (disabled, or served from the cache).
 export type ExtractionResult =
-  | { ok: true; extraction: Extraction; cached: boolean }
+  | {
+      ok: true;
+      extraction: Extraction;
+      cached: boolean;
+      verification: VerificationSummary | null;
+    }
   | { ok: false; extraction: Extraction; reason: string };
 
 const UNCERTAIN_FIELD = { raw: null, value: null, evidence: null, isUncertain: true } as const;
@@ -56,7 +62,9 @@ export async function extractInvoice(
 ): Promise<ExtractionResult> {
   try {
     const cachedExtraction = await readCachedExtraction(input.fileHash, options.cacheDir);
-    if (cachedExtraction) return { ok: true, extraction: cachedExtraction, cached: true };
+    if (cachedExtraction) {
+      return { ok: true, extraction: cachedExtraction, cached: true, verification: null };
+    }
 
     const client = options.client ?? makeAnthropicClient();
     const read = await readWithRetry(client, input);
@@ -70,7 +78,11 @@ export async function extractInvoice(
     if (verification?.verifierError == null) {
       await writeCachedExtraction(input.fileHash, extraction, options.cacheDir);
     }
-    return { ok: true, extraction, cached: false };
+    const summary = verification && {
+      mismatchedFields: verification.mismatchedFields,
+      verifierError: verification.verifierError,
+    };
+    return { ok: true, extraction, cached: false, verification: summary };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     return {

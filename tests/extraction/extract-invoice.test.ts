@@ -120,12 +120,22 @@ describe("extractInvoice — verification", () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 
+  it("reports no verification when the verifier did not run or the file was cached", async () => {
+    const create = vi.fn().mockResolvedValue(textResponse(JSON.stringify(READER_RESPONSE)));
+    const unverified = await extractInvoice(INPUT, { client: makeClient(create), cacheDir });
+    const cached = await extractInvoice(INPUT, { cacheDir, verify: true });
+
+    expect(unverified).toMatchObject({ ok: true, verification: null });
+    expect(cached).toMatchObject({ ok: true, cached: true, verification: null });
+  });
+
   it("keeps the extraction when the verifier agrees", async () => {
     const client = clientWithVerifier(READER_RESPONSE);
     const result = await extractInvoice(INPUT, { client, cacheDir, verify: true });
 
     expect(result.ok).toBe(true);
     expect(result.extraction.amountMinor).toMatchObject({ value: 250000, isUncertain: false });
+    expect(result).toMatchObject({ verification: { mismatchedFields: [], verifierError: null } });
   });
 
   it("marks a field uncertain, and caches it that way, when the verifier disagrees", async () => {
@@ -134,6 +144,9 @@ describe("extractInvoice — verification", () => {
     const result = await extractInvoice(INPUT, { client, cacheDir, verify: true });
 
     expect(result.extraction.amountMinor).toMatchObject({ value: 250000, isUncertain: true });
+    expect(result).toMatchObject({
+      verification: { mismatchedFields: ["amountMinor"], verifierError: null },
+    });
     const cached = await extractInvoice(INPUT, { cacheDir });
     expect(cached).toMatchObject({ ok: true, cached: true });
     expect(cached.extraction.amountMinor.isUncertain).toBe(true);
@@ -146,6 +159,9 @@ describe("extractInvoice — verification", () => {
     expect(result.ok).toBe(true);
     expect(result.extraction.payee.isUncertain).toBe(true);
     expect(result.extraction.amountMinor.isUncertain).toBe(true);
+    expect(result).toMatchObject({
+      verification: { mismatchedFields: [], verifierError: expect.stringContaining("API timeout") },
+    });
   });
 
   it("does not cache the extraction when the verifier call fails, so the next call verifies again", async () => {
