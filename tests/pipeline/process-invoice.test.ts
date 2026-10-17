@@ -3,8 +3,9 @@ import type { Client } from "@libsql/client";
 import { extractInvoice, makeUncertainExtraction } from "@/extraction/extract-invoice";
 import { detectSourceFormat, processInvoice } from "@/pipeline/process-invoice";
 import { saveRulesConfig } from "@/pipeline/save-rules-config";
+import { insertApproval } from "@/store/approval-repository";
 import { listDecisionRecords } from "@/store/decision-repository";
-import { buildExtraction, buildRulesConfig } from "../contracts/fixtures";
+import { buildApproval, buildExtraction, buildRulesConfig } from "../contracts/fixtures";
 import { NOW } from "../engine/fixtures";
 import { countAuditEntries, openMemoryDb, openTempFileDb } from "../store/fixtures";
 
@@ -123,6 +124,28 @@ describe("processInvoice", () => {
       ok: false,
       reason: "SOURCE_TEXT_TOO_LONG",
     });
+  });
+
+  it("still catches a clean copy of an approved invoice whose payee and reference were uncertain", async () => {
+    const uncertain = buildExtraction();
+    uncertain.payee.isUncertain = true;
+    uncertain.reference.isUncertain = true;
+    extractMock.mockResolvedValueOnce({
+      ok: true,
+      extraction: uncertain,
+      cached: true,
+      verification: null,
+    });
+    const first = await processInvoice(db, PDF, NOW);
+    if (!first.ok) throw new Error(first.reason);
+    expect(first.record.status).toBe("PENDING_APPROVAL");
+    await insertApproval(db, buildApproval(first.record.decision, "APPROVED"), "2026-10");
+
+    const copy = { ...PDF, fileBuffer: Buffer.from("%PDF-1.4 clean copy") };
+    const second = await processInvoice(db, copy, NOW);
+    if (!second.ok) throw new Error(second.reason);
+    const duplicate = second.record.decision.ruleResults.find(({ ruleId }) => ruleId === "R2");
+    expect(duplicate?.outcome).not.toBe("PASS");
   });
 
   it("decides a file uploaded twice at the same time only once", async () => {

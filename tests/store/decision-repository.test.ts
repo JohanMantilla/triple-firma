@@ -77,7 +77,7 @@ describe("listHistoryEntries", () => {
     });
   });
 
-  it("keeps certain payee and reference, and leaves uncertain ones out", async () => {
+  it("keeps the payee and reference even when they were read with doubt", async () => {
     const uncertain = buildStoredInvoice("inv-uncertain");
     uncertain.extraction.payee = { ...uncertain.extraction.payee, isUncertain: true };
     uncertain.extraction.reference = { ...uncertain.extraction.reference, isUncertain: true };
@@ -86,7 +86,11 @@ describe("listHistoryEntries", () => {
 
     const [certain, unreadable] = await listHistoryEntries(db);
     expect(certain).toMatchObject({ payee: "Dev Partners SAS", reference: "INV-102" });
-    expect(unreadable).toMatchObject({ payee: null, reference: null, amountMinor: 250_000 });
+    expect(unreadable).toMatchObject({
+      payee: "Dev Partners SAS",
+      reference: "INV-102",
+      amountMinor: 250_000,
+    });
   });
 });
 
