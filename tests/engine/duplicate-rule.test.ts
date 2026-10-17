@@ -90,10 +90,20 @@ describe("evaluateDuplicateRule (R2)", () => {
     ["one changed character", "INV-103"],
     ["one added character", "INV-1020"],
     ["leading zeros", "INV-00102"],
+    ["two swapped neighbouring characters", "INV-120"],
   ])("escalates a near duplicate with %s", (_case, reference) => {
     expect(evaluate([past({ reference })])).toMatchObject({
       outcome: "ESCALATE",
       compared: { matchType: "NEAR", matchedReference: reference },
+    });
+  });
+
+  it("escalates leading zeros in a later group of digits", () => {
+    const withGroups = (invoice: Invoice) => {
+      invoice.extraction.reference = { ...invoice.extraction.reference, value: "INV-2026-7" };
+    };
+    expect(evaluate([past({ reference: "INV-2026-007" })], withGroups).compared).toMatchObject({
+      matchType: "NEAR",
     });
   });
 

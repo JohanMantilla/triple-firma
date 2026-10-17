@@ -15,3 +15,17 @@ export function isWithinOneEdit(a: string, b: string): boolean {
   const restOfLonger = longer.slice(index + 1);
   return restOfShorter.join("") === restOfLonger.join("");
 }
+
+// True when two strings of the same length differ only by two neighbouring characters swapped
+// ("FAC102" vs "FAC120"), a common typing slip in invoice references.
+export function isOneSwapApart(a: string, b: string): boolean {
+  const first = [...a];
+  const second = [...b];
+  if (first.length !== second.length) return false;
+  const differences = first.flatMap((character, index) =>
+    character === second[index] ? [] : [index],
+  );
+  if (differences.length !== 2) return false;
+  const [i, j] = differences;
+  return j === i + 1 && first[i] === second[j] && first[j] === second[i];
+}

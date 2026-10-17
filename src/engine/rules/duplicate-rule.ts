@@ -5,7 +5,7 @@ import { normalizeReference } from "@/contracts/reference";
 import { formatMoney } from "../format-money";
 import { MESSAGES } from "../messages";
 import { type RuleContext, toLocalDate } from "../rule-context";
-import { isWithinOneEdit } from "./edit-distance";
+import { isOneSwapApart, isWithinOneEdit } from "./edit-distance";
 
 type Match = {
   entry: HistoryEntry;
@@ -144,13 +144,19 @@ function classify(entry: HistoryEntry, invoiceReference: string | null): Match |
   const past = normalizeReference(entry.reference);
   const current = normalizeReference(invoiceReference);
   if (past === current) return { entry, kind: entry.payee === null ? "NEAR" : "EXACT" };
-  if (isWithinOneEdit(past, current) || stripLeadingZeros(past) === stripLeadingZeros(current)) {
+  const isNear =
+    isWithinOneEdit(past, current) ||
+    isOneSwapApart(past, current) ||
+    normalizeReference(stripLeadingZeros(entry.reference)) ===
+      normalizeReference(stripLeadingZeros(invoiceReference));
+  if (isNear) {
     return { entry, kind: "NEAR" };
   }
   return null;
 }
 
-// "FAC00102" -> "FAC102": leading zeros of every run of digits are dropped.
+// "FAC-00102" -> "FAC-102", "INV-2026-007" -> "INV-2026-7": leading zeros of every run of digits are
+// dropped. It runs on the reference as written, before normalizeReference joins its digit groups.
 function stripLeadingZeros(reference: string): string {
   return reference.replace(/(?<!\d)0+(?=\d)/g, "");
 }
