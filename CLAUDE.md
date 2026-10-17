@@ -18,7 +18,7 @@ cp .env.example .env.local   # Windows PowerShell: copy .env.example .env.local
 npm run dev                  # http://localhost:3000 and http://localhost:3000/api/health
 ```
 
-No secrets are needed to start: the database is a local file (`file:local.db`) and the UI uses mocks (`NEXT_PUBLIC_USE_MOCK_API=true`). `ANTHROPIC_API_KEY` is only needed for live extraction.
+No secrets are needed to start the UI: it uses mocks (`NEXT_PUBLIC_USE_MOCK_API=true`). The backend needs your own Turso database in `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`, one per developer because `npm run demo` resets it (steps in `README.md`); `TURSO_DATABASE_URL=file:local.db` is the offline Plan B. Tests use `:memory:`. `ANTHROPIC_API_KEY` is only needed for live extraction.
 
 ## Commands
 
@@ -35,7 +35,7 @@ npm run build
 
 ## Stack
 
-Next.js 16 (App Router, Route Handlers) · TypeScript strict · Node 24 LTS · Zod 4 · `@libsql/client` (local file, Turso on deploy) · `@anthropic-ai/sdk` · Tailwind CSS 4 · Vitest · tsx · npm only.
+Next.js 16 (App Router, Route Handlers) · TypeScript strict · Node 24 LTS · Zod 4 · `@libsql/client` (Turso; `:memory:` in tests) · `@anthropic-ai/sdk` · Tailwind CSS 4 · Vitest · tsx · npm only.
 
 Next.js 16 has breaking changes versus older versions: read the guides in `node_modules/next/dist/docs/` before using an API you are not sure about.
 

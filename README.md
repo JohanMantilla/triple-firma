@@ -54,7 +54,21 @@ cp .env.example .env.local
 copy .env.example .env.local
 ```
 
-Para empezar no hace falta llenar nada: la base de datos es un archivo local y la UI usa datos de ejemplo. `ANTHROPIC_API_KEY` solo se necesita para leer facturas con el modelo de verdad.
+Con eso ya puedes trabajar en la UI: usa datos de ejemplo (`NEXT_PUBLIC_USE_MOCK_API=true`) y no necesita secretos. `ANTHROPIC_API_KEY` solo se necesita para leer facturas con el modelo de verdad.
+
+**Si vas a correr el backend** (la API o `npm run demo`), crea **tu propia** base de datos en Turso. Es gratis, y cada persona usa la suya porque `npm run demo` la borra y la vuelve a cargar:
+
+1. Crea una cuenta en https://turso.tech e instala la CLI `turso` (en Windows, úsala desde WSL o crea la base en el panel web).
+2. Crea la base y copia sus datos en `.env.local`:
+
+```bash
+turso auth login
+turso db create triple-firma-<tu-nombre>
+turso db show triple-firma-<tu-nombre> --url     # va en TURSO_DATABASE_URL
+turso db tokens create triple-firma-<tu-nombre>  # va en TURSO_AUTH_TOKEN
+```
+
+> **¿Sin internet?** Pon `TURSO_DATABASE_URL=file:local.db` en `.env.local`: todo funciona igual con un archivo local (es el plan B de la presentación).
 
 **3. Inicia la app:**
 
