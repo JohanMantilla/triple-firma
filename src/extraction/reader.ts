@@ -12,7 +12,11 @@ import { READER_SYSTEM_PROMPT_V2 } from "./prompts/reader-v2";
 const ReaderFieldSchema = z.object({
   raw: z.string().nullable(),
   value: z.string().nullable(),
-  evidence: z.string().nullable(),
+  // "" (how the wire schema says "absent") and null both mean no evidence.
+  evidence: z
+    .string()
+    .nullable()
+    .transform((evidence) => (evidence === "" ? null : evidence)),
   isUncertain: z.boolean(),
 });
 export type ReaderField = z.infer<typeof ReaderFieldSchema>;
