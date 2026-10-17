@@ -527,6 +527,17 @@ Cada persona es **dueña de una carpeta** y trabaja con su propio Claude Code. N
 
 **Regla de independencia:** C escribe los resultados esperados **sin mirar** lo que hace el motor. Si A o B quieren cambiar `expected.csv`, discute el equipo completo. Así nuestra métrica de fugas es creíble.
 
+### Integración del motor: pendientes por persona
+
+El motor está completo (R1–R10, revalidación al aprobar y casos límite) y ya puede pagar. Para que no haya fugas al integrarlo, cada persona tiene que:
+
+| Persona | Qué hacer | Detalle |
+|---|---|---|
+| **B** | Extraer el impuesto impreso como `taxMinor` (copiado, nunca calculado; `null` si no hay) en el Lector y el Verificador. Mientras no exista, toda factura con IVA escala en R10. Si las marcas de `suspiciousText` (también la urgencia sola) bajan mucho la autonomía, ajustar el prompt: el motor no las filtra. | Sección 3, "R10: patrones de instrucciones al sistema" |
+| **E** | En `resolveApproval`: llamar a `revalidateApproval` para aprobar **y** rechazar, guardar el `Approval` tal cual, actualizar el historial (PAY → `PAYABLE` con `period` y `decidedAt` de la aprobación; BLOCK → `REJECTED` o `BLOCKED`) y, si lanza error, no guardar nada. Rechazar con un test una decisión que ya tiene `Approval`. Pasar al motor el historial con **todos** los estados y periodos. Procesar las facturas de a una y aprobar en una transacción. Ids de factura únicos por archivo. No permitir cambiar `baseCurrency` si hay decisiones. | "Revalidación al aprobar" y "Notas para E"; sección 10, "Límites de R7" |
+| **C** | En facturas con desglose, ítems + impuesto debe dar **exacto** el total. Evitar en facturas normales líneas que empiecen con "System:" o "Assistant:". Dos facturas del mismo beneficiario y monto con referencias a un carácter ("FAC-102" y "FAC-103") escalan a propósito. Avisar a A de cualquier fuga del `npm run eval` apenas aparezca. | Sección 10, "Límites de R10" |
+| **D** | En la bandeja, mostrar los mensajes de `revalidationResults` cuando una aprobación termina en FRENAR. En la pantalla de reglas, no permitir cambiar `baseCurrency` si ya hay decisiones. | `src/contracts/approval.ts` |
+
 ### Commits, ramas y PRs
 
 **Formato: [Conventional Commits](https://www.conventionalcommits.org/), en inglés.**
