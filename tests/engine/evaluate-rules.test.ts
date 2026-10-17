@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { RULE_IDS } from "@/contracts/decision";
 import { evaluateRules, evaluateRulesWith, type RuleEvaluator } from "@/engine/evaluate-rules";
-import { buildInvoice, buildRulesConfig, NOW, stubRules } from "./fixtures";
+import { buildHistoryEntry, buildInvoice, buildRulesConfig, NOW, stubRules } from "./fixtures";
 
 const input = {
   invoice: buildInvoice(),
@@ -83,6 +83,57 @@ describe("evaluateRulesWith", () => {
 
   it("uses the injected time as the decision time", () => {
     expect(evaluateRulesWith(input, stubRules()).decidedAt).toBe(NOW);
+  });
+
+  it("throws on a config with a missing limit instead of letting a rule compare against undefined", () => {
+    const { approvalThresholdMinor: _omitted, ...incomplete } = buildRulesConfig();
+    expect(() =>
+      evaluateRulesWith({ ...input, config: incomplete as never }, stubRules()),
+    ).toThrow();
+  });
+
+  it("throws on a history entry with a string amount", () => {
+    const entry = { ...buildHistoryEntry(), baseAmountMinor: "50000" };
+    expect(() => evaluateRulesWith({ ...input, history: [entry as never] }, stubRules())).toThrow();
+  });
+
+  it("throws on an invoice that breaks its contract", () => {
+    const invoice = { ...buildInvoice(), sourceFormat: "EMAIL" as const, sourceText: null };
+    expect(() => evaluateRulesWith({ ...input, invoice }, stubRules())).toThrow();
+  });
+
+  it("escalates a rule that tries to change the shared context, and later rules see the original", () => {
+    const rules = stubRules();
+    rules.R3 = (ctx) => {
+      (ctx as { baseAmountMinor: number | null }).baseAmountMinor = 0;
+      return stubRules().R3(ctx);
+    };
+    rules.R5 = (ctx) => ({
+      ruleId: "R5",
+      outcome: ctx.baseAmountMinor === 250_000 ? "PASS" : "BLOCK",
+      message: "R5: lee el monto original.",
+      compared: { baseAmountMinor: ctx.baseAmountMinor },
+    });
+    const decision = evaluateRulesWith(input, rules);
+    expect(decision.ruleResults.find((result) => result.ruleId === "R3")?.outcome).toBe("ESCALATE");
+    expect(decision.ruleResults.find((result) => result.ruleId === "R5")?.outcome).toBe("PASS");
+    expect(decision.baseAmountMinor).toBe(250_000);
+  });
+
+  it("escalates a rule that tries to change nested data such as the config", () => {
+    const rules = stubRules();
+    rules.R6 = (ctx) => {
+      (ctx.config as { monthlyBudgetMinor: number }).monthlyBudgetMinor = 1;
+      return stubRules().R6(ctx);
+    };
+    expect(evaluateRulesWith(input, rules).outcome).toBe("ESCALATE");
+  });
+
+  it("does not freeze the caller's objects", () => {
+    const callerInput = { ...input, invoice: buildInvoice(), config: buildRulesConfig() };
+    evaluateRulesWith(callerInput, stubRules());
+    expect(Object.isFrozen(callerInput.invoice)).toBe(false);
+    expect(Object.isFrozen(callerInput.config)).toBe(false);
   });
 
   it("rejects a now that is not a UTC timestamp", () => {
