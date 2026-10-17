@@ -1,10 +1,16 @@
 import { z } from "zod";
 
-// All supported currencies use 2 decimal places, so amountMinor is always the amount in cents.
+// Any ISO 4217 code an invoice may show. Codes outside SUPPORTED_CURRENCIES are escalated by R8.
 export const CurrencyCodeSchema = z
   .string()
   .regex(/^[A-Z]{3}$/, "Currency must be an ISO 4217 code such as USD or COP");
 export type CurrencyCode = z.infer<typeof CurrencyCodeSchema>;
+
+// Every supported currency has 2 decimal places, so amountMinor is always the amount in cents.
+// Adding a currency with another exponent (JPY has 0) would break that assumption: do not add one.
+export const SUPPORTED_CURRENCIES = ["USD", "COP", "MXN", "ARS"] as const;
+export const SupportedCurrencySchema = z.enum(SUPPORTED_CURRENCIES);
+export type SupportedCurrency = z.infer<typeof SupportedCurrencySchema>;
 
 export const MinorAmountSchema = z.int().nonnegative();
 

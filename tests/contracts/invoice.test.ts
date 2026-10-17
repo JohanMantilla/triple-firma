@@ -7,7 +7,7 @@ describe("InvoiceSchema", () => {
     id: "inv-1",
     fileHash: VALID_HASH,
     sourceFormat: "PDF",
-    receivedAt: "2026-10-17T09:00:00-04:00",
+    receivedAt: "2026-10-17T13:00:00Z",
     extraction: buildExtraction(),
   };
 

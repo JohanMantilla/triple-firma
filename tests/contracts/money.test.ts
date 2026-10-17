@@ -4,6 +4,7 @@ import {
   ExchangeRateSchema,
   isExchangeRateOne,
   MinorAmountSchema,
+  SupportedCurrencySchema,
 } from "@/contracts/money";
 
 describe("MinorAmountSchema", () => {
@@ -23,6 +24,16 @@ describe("CurrencyCodeSchema", () => {
 
   it.each(["usd", "$", "US", "USDT", ""])("rejects %s", (code) => {
     expect(CurrencyCodeSchema.safeParse(code).success).toBe(false);
+  });
+});
+
+describe("SupportedCurrencySchema", () => {
+  it.each(["USD", "COP", "MXN", "ARS"])("accepts %s", (code) => {
+    expect(SupportedCurrencySchema.safeParse(code).success).toBe(true);
+  });
+
+  it.each(["JPY", "EUR", "CLP"])("rejects %s, which is not configured with 2 decimals", (code) => {
+    expect(SupportedCurrencySchema.safeParse(code).success).toBe(false);
   });
 });
 

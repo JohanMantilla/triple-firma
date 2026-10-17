@@ -41,4 +41,22 @@ describe("ExtractionSchema", () => {
     const { isUncertain: _omitted, ...payee } = extraction.payee;
     expect(ExtractionSchema.safeParse({ ...extraction, payee }).success).toBe(false);
   });
+
+  it.each([0, -250_000])("rejects the amount %s, so R1 escalates it", (value) => {
+    const extraction = buildExtraction();
+    extraction.amountMinor = { ...extraction.amountMinor, value };
+    expect(ExtractionSchema.safeParse(extraction).success).toBe(false);
+  });
+
+  it("rejects a negative sum of line items", () => {
+    expect(
+      ExtractionSchema.safeParse({ ...buildExtraction(), lineItemsSumMinor: -1 }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a payee made only of invisible characters", () => {
+    const extraction = buildExtraction();
+    extraction.payee = { ...extraction.payee, value: "​ ‍" };
+    expect(ExtractionSchema.safeParse(extraction).success).toBe(false);
+  });
 });

@@ -65,11 +65,49 @@ describe("RulesConfigSchema", () => {
   });
 
   it("rejects an agreement in a currency without exchange rate", () => {
-    const config = buildRulesConfig();
-    const agreements = [{ ...config.agreements[0], currency: "EUR" }];
+    const config = buildRulesConfig({ exchangeRates: { USD: "1", COP: "4000" } });
+    const agreements = [{ ...config.agreements[0], currency: "ARS" as const }];
     expect(issuesOf({ ...config, agreements })).toContain(
       "Agreement currency has no exchange rate",
     );
+  });
+
+  it.each(["JPY", "EUR"])("rejects %s, a currency outside the supported list", (currency) => {
+    const exchangeRates = { USD: "1", [currency]: "150" };
+    expect(RulesConfigSchema.safeParse(buildRulesConfig({ exchangeRates } as never)).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects a blocked payee that matches an allowed one after normalization", () => {
+    expect(issuesOf(buildRulesConfig({ blockedPayees: ["DEV PARTNERS S.A.S."] }))).toContain(
+      "A payee cannot be both allowed and blocked",
+    );
+  });
+
+  it("rejects two agreements for the same payee that are valid at the same time", () => {
+    const config = buildRulesConfig();
+    const agreements = [
+      { ...config.agreements[0], validFrom: "2026-01-01", validUntil: null },
+      {
+        ...config.agreements[0],
+        payee: "dev partners s.a.s.",
+        validFrom: "2026-10-01",
+        validUntil: "2026-12-31",
+      },
+    ];
+    expect(issuesOf({ ...config, agreements })).toContain(
+      "A payee cannot have two agreements valid at the same time",
+    );
+  });
+
+  it("accepts consecutive agreements for the same payee", () => {
+    const config = buildRulesConfig();
+    const agreements = [
+      { ...config.agreements[0], validFrom: "2026-01-01", validUntil: "2026-06-30" },
+      { ...config.agreements[0], amountMinor: 300_000, validFrom: "2026-07-01", validUntil: null },
+    ];
+    expect(RulesConfigSchema.safeParse({ ...config, agreements }).success).toBe(true);
   });
 
   it("rejects an agreement that ends before it starts", () => {

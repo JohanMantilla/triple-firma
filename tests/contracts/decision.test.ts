@@ -8,11 +8,13 @@ function buildDecision(overrides: Partial<Decision> = {}): Decision {
     invoiceId: "inv-1",
     outcome: "PAY",
     ruleResults: buildRuleResults(),
+    amountMinor: 150_000,
+    currency: "USD",
     baseAmountMinor: 150_000,
     exchangeRate: "1",
     explanation: "Pagada: todas las reglas pasaron.",
     configVersion: 1,
-    decidedAt: "2026-10-17T10:00:00-04:00",
+    decidedAt: "2026-10-17T14:00:00Z",
     ...overrides,
   };
 }
@@ -72,10 +74,12 @@ describe("DecisionSchema", () => {
     expect(DecisionSchema.safeParse(decision).success).toBe(false);
   });
 
-  it("rejects PAY without base amount or exchange rate", () => {
-    expect(DecisionSchema.safeParse(buildDecision({ baseAmountMinor: null })).success).toBe(false);
-    expect(DecisionSchema.safeParse(buildDecision({ exchangeRate: null })).success).toBe(false);
-  });
+  it.each(["amountMinor", "currency", "baseAmountMinor", "exchangeRate"] as const)(
+    "rejects PAY without %s",
+    (field) => {
+      expect(DecisionSchema.safeParse(buildDecision({ [field]: null })).success).toBe(false);
+    },
+  );
 
   it("accepts ESCALATE without base amount when the currency is unknown", () => {
     const decision = buildDecision({

@@ -13,7 +13,8 @@ describe("HistoryEntrySchema", () => {
     exchangeRate: "4000",
     baseAmountMinor: 112_500,
     status: "PENDING_APPROVAL",
-    decidedAt: "2026-10-03T10:00:00-04:00",
+    period: "2026-10",
+    decidedAt: "2026-10-03T14:00:00Z",
   };
 
   it("accepts a pending escalation that reserves budget", () => {
@@ -43,6 +44,14 @@ describe("HistoryEntrySchema", () => {
   it("rejects an entry without the file hash", () => {
     const { fileHash: _omitted, ...withoutHash } = entry;
     expect(HistoryEntrySchema.safeParse(withoutHash).success).toBe(false);
+  });
+
+  it.each(["2026-13", "2026-1", "10-2026"])("rejects the period %s", (period) => {
+    expect(HistoryEntrySchema.safeParse({ ...entry, period }).success).toBe(false);
+  });
+
+  it("rejects a zero amount", () => {
+    expect(HistoryEntrySchema.safeParse({ ...entry, amountMinor: 0 }).success).toBe(false);
   });
 
   it("rejects an unknown status", () => {

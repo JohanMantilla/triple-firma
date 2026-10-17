@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { IsoDateTimeSchema } from "./dates";
-import { ExchangeRateSchema, MinorAmountSchema } from "./money";
+import {
+  CurrencyCodeSchema,
+  ExchangeRateSchema,
+  MinorAmountSchema,
+  PositiveMinorAmountSchema,
+} from "./money";
 
 export const RULE_IDS = ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10"] as const;
 export const RuleIdSchema = z.enum(RULE_IDS);
@@ -33,6 +38,8 @@ export const DecisionSchema = z
     invoiceId: z.string().min(1),
     outcome: DecisionOutcomeSchema,
     ruleResults: z.array(RuleResultSchema),
+    amountMinor: PositiveMinorAmountSchema.nullable(),
+    currency: CurrencyCodeSchema.nullable(),
     baseAmountMinor: MinorAmountSchema.nullable(),
     exchangeRate: ExchangeRateSchema.nullable(),
     explanation: z.string().min(1),
@@ -63,11 +70,14 @@ export const DecisionSchema = z
 
     if (
       decision.outcome === "PAY" &&
-      (decision.baseAmountMinor === null || decision.exchangeRate === null)
+      (decision.amountMinor === null ||
+        decision.currency === null ||
+        decision.baseAmountMinor === null ||
+        decision.exchangeRate === null)
     ) {
       ctx.addIssue({
         code: "custom",
-        message: "A PAY decision must record its base amount and exchange rate",
+        message: "A PAY decision must record its amount, currency, base amount and exchange rate",
         path: ["baseAmountMinor"],
       });
     }

@@ -1,20 +1,19 @@
 import { z } from "zod";
 import { IsoDateSchema, TimezoneSchema } from "./dates";
 import {
-  CurrencyCodeSchema,
   ExchangeRateSchema,
   isExchangeRateOne,
   MinorAmountSchema,
   PositiveMinorAmountSchema,
+  SupportedCurrencySchema,
 } from "./money";
-
-const PayeeNameSchema = z.string().trim().min(1);
+import { normalizePayee, PayeeNameSchema } from "./payee";
 
 export const AgreementSchema = z
   .object({
     payee: PayeeNameSchema,
     amountMinor: PositiveMinorAmountSchema,
-    currency: CurrencyCodeSchema,
+    currency: SupportedCurrencySchema,
     validFrom: IsoDateSchema,
     validUntil: IsoDateSchema.nullable(),
   })
@@ -33,11 +32,12 @@ export const DueDatePolicySchema = z.object({
 });
 
 // Every field is required: an incomplete configuration is rejected instead of silently passing a rule.
+// toleranceMinor is in the agreement's currency. R7 compares split payments against approvalThresholdMinor.
 export const RulesConfigSchema = z
   .object({
-    baseCurrency: CurrencyCodeSchema,
+    baseCurrency: SupportedCurrencySchema,
     timezone: TimezoneSchema,
-    exchangeRates: z.record(CurrencyCodeSchema, ExchangeRateSchema),
+    exchangeRates: z.partialRecord(SupportedCurrencySchema, ExchangeRateSchema),
     approvalThresholdMinor: PositiveMinorAmountSchema,
     hardCapMinor: PositiveMinorAmountSchema.nullable(),
     monthlyBudgetMinor: PositiveMinorAmountSchema,
@@ -66,9 +66,9 @@ export const RulesConfigSchema = z
       });
     }
 
-    const allowed = new Set(config.allowedPayees.map(normalizeForComparison));
+    const allowed = new Set(config.allowedPayees.map(normalizePayee));
     config.blockedPayees.forEach((payee, index) => {
-      if (allowed.has(normalizeForComparison(payee))) {
+      if (allowed.has(normalizePayee(payee))) {
         ctx.addIssue({
           code: "custom",
           message: "A payee cannot be both allowed and blocked",
@@ -85,10 +85,29 @@ export const RulesConfigSchema = z
           path: ["agreements", index, "currency"],
         });
       }
+
+      const hasOverlap = config.agreements
+        .slice(0, index)
+        .some(
+          (other) => isSamePayee(other, agreement) && areValidPeriodsOverlapping(other, agreement),
+        );
+      if (hasOverlap) {
+        ctx.addIssue({
+          code: "custom",
+          message: "A payee cannot have two agreements valid at the same time",
+          path: ["agreements", index],
+        });
+      }
     });
   });
 export type RulesConfig = z.infer<typeof RulesConfigSchema>;
 
-function normalizeForComparison(payee: string): string {
-  return payee.trim().toLowerCase();
+function isSamePayee(a: Agreement, b: Agreement): boolean {
+  return normalizePayee(a.payee) === normalizePayee(b.payee);
+}
+
+function areValidPeriodsOverlapping(a: Agreement, b: Agreement): boolean {
+  const aStartsBeforeBEnds = b.validUntil === null || a.validFrom <= b.validUntil;
+  const bStartsBeforeAEnds = a.validUntil === null || b.validFrom <= a.validUntil;
+  return aStartsBeforeBEnds && bStartsBeforeAEnds;
 }

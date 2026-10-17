@@ -15,7 +15,7 @@ function buildApproval(overrides: Partial<Approval> = {}): Approval {
     comment: "Pago recurrente revisado.",
     resultingOutcome: "PAY",
     revalidationResults: PASSED_REVALIDATION,
-    resolvedAt: "2026-10-17T11:00:00-04:00",
+    resolvedAt: "2026-10-17T15:00:00Z",
     ...overrides,
   };
 }

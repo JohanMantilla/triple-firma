@@ -9,7 +9,7 @@ function buildEntry(overrides: Partial<AuditEntry> = {}): AuditEntry {
     payload: { decisionId: "dec-1", outcome: "PAY" },
     prevHash: VALID_HASH,
     hash: "b".repeat(64),
-    createdAt: "2026-10-17T10:00:00-04:00",
+    createdAt: "2026-10-17T14:00:00Z",
     ...overrides,
   };
 }
