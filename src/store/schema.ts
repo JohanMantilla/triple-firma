@@ -25,10 +25,23 @@ CREATE TABLE IF NOT EXISTS approvals (
   period TEXT NOT NULL,
   approval_json TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS audit_entries (
+  seq INTEGER PRIMARY KEY,
+  type TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  prev_hash TEXT,
+  hash TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS audit_entries_no_update BEFORE UPDATE ON audit_entries
+  BEGIN SELECT RAISE(ABORT, 'audit_entries is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS audit_entries_no_delete BEFORE DELETE ON audit_entries
+  BEGIN SELECT RAISE(ABORT, 'audit_entries is append-only'); END;
 `;
 
 // Children first, so it also works with foreign keys enforced. Triggers are dropped with their table.
 export const DROP_SCHEMA = `
+DROP TABLE IF EXISTS audit_entries;
 DROP TABLE IF EXISTS approvals;
 DROP TABLE IF EXISTS decisions;
 DROP TABLE IF EXISTS invoices;
