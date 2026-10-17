@@ -240,12 +240,29 @@ describe("evaluateBudgetRule (R6)", () => {
   });
 });
 
+describe("checkBudget at approval", () => {
+  it("blocks an approval without base amount, with a message that matches the outcome", () => {
+    const ctx = buildContext(null, []);
+    expect(checkBudget(ctx, { isApproval: true })).toMatchObject({
+      outcome: "BLOCK",
+      message:
+        "R6: no se puede aprobar: la decisión no tiene monto en USD para compararlo con el presupuesto.",
+    });
+    expect(evaluateBudgetRule(ctx).outcome).toBe("ESCALATE");
+  });
+
+  it("never escalates at approval: it passes or blocks", () => {
+    const ctx = buildContext(400_001, [payable("inv-a", 1_600_000), pending("inv-p", 300_000)]);
+    expect(checkBudget(ctx, { isApproval: true }).outcome).toBe("BLOCK");
+  });
+});
+
 describe("checkBudget without reserving pending escalations (approval revalidation)", () => {
   const history = [payable("inv-a", 1_600_000), pending("inv-p", 300_000)];
 
   it("ignores the invoice's own pending escalation, already in history at approval", () => {
     const ctx = buildContext(200_000, [...COMMITTED_18_000, pending("inv-1", 200_000)]);
-    expect(checkBudget(ctx, { isReservingPending: false })).toMatchObject({
+    expect(checkBudget(ctx, { isApproval: true })).toMatchObject({
       outcome: "PASS",
       compared: { committedMinor: 1_800_000, reservedMinor: 0 },
     });
@@ -254,7 +271,7 @@ describe("checkBudget without reserving pending escalations (approval revalidati
   it("lets two pending escalations not block each other", () => {
     const ctx = buildContext(400_000, history);
     expect(evaluateBudgetRule(ctx).outcome).toBe("ESCALATE");
-    expect(checkBudget(ctx, { isReservingPending: false })).toMatchObject({
+    expect(checkBudget(ctx, { isApproval: true })).toMatchObject({
       outcome: "PASS",
       compared: { reservedMinor: 0 },
     });
@@ -266,7 +283,7 @@ describe("checkBudget without reserving pending escalations (approval revalidati
     ["one cent above the committed budget", 400_001, "BLOCK"],
   ])("compares %s", (_case, amountMinor, outcome) => {
     const ctx = buildContext(amountMinor, history);
-    expect(checkBudget(ctx, { isReservingPending: false }).outcome).toBe(outcome);
+    expect(checkBudget(ctx, { isApproval: true }).outcome).toBe(outcome);
   });
 });
 
