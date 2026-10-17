@@ -77,6 +77,18 @@ describe("evaluateRulesWith", () => {
     });
   });
 
+  it("records a valid decision without base amount when the amount is uncertain", () => {
+    const invoice = buildInvoice();
+    invoice.extraction.amountMinor = { ...invoice.extraction.amountMinor, isUncertain: true };
+    const decision = evaluateRulesWith({ ...input, invoice }, stubRules({ R1: "ESCALATE" }));
+    expect(decision).toMatchObject({
+      outcome: "ESCALATE",
+      amountMinor: 250_000,
+      exchangeRate: null,
+      baseAmountMinor: null,
+    });
+  });
+
   it("is deterministic: the same input gives the same decision", () => {
     expect(evaluateRulesWith(input, stubRules())).toEqual(evaluateRulesWith(input, stubRules()));
   });

@@ -45,6 +45,25 @@ describe("buildRuleContext", () => {
     expect(ctx.exchangeRate).toBeNull();
   });
 
+  it.each(["amountMinor", "currency"] as const)(
+    "keeps an uncertain %s for display but does not convert it",
+    (field) => {
+      const invoice = invoiceWith(800_000_000, "COP");
+      if (field === "amountMinor") {
+        invoice.extraction.amountMinor = { ...invoice.extraction.amountMinor, isUncertain: true };
+      } else {
+        invoice.extraction.currency = { ...invoice.extraction.currency, isUncertain: true };
+      }
+      const ctx = buildRuleContext({ invoice, config: buildRulesConfig(), history: [], now: NOW });
+      expect(ctx).toMatchObject({
+        amountMinor: 800_000_000,
+        currency: "COP",
+        exchangeRate: null,
+        baseAmountMinor: null,
+      });
+    },
+  );
+
   it("computes the period of now in the configured time zone", () => {
     expect(contextFor(100_000, "USD").period).toBe("2026-10");
   });

@@ -34,12 +34,16 @@ export function buildRuleContext(input: RuleContextInput): RuleContext {
   const config = RulesConfigSchema.parse(input.config);
   const history = input.history.map((entry) => HistoryEntrySchema.parse(entry));
   const validNow = IsoDateTimeSchema.parse(input.now);
-  const amountMinor = invoice.extraction.amountMinor.value;
-  const currency = invoice.extraction.currency.value;
+  const { amountMinor: amountField, currency: currencyField } = invoice.extraction;
+  const amountMinor = amountField.value;
+  const currency = currencyField.value;
   const configuredRate =
     currency !== null && isSupportedCurrency(currency) ? config.exchangeRates[currency] : undefined;
+  // An uncertain amount or currency is kept for display but never converted: a misread figure must not
+  // reserve a wrong (too small) budget. With no base amount, R6 BLOCKs it if someone approves it.
+  const isMoneyCertain = !amountField.isUncertain && !currencyField.isUncertain;
   const baseAmountMinor =
-    amountMinor !== null && configuredRate !== undefined
+    isMoneyCertain && amountMinor !== null && configuredRate !== undefined
       ? convertToBaseMinor(amountMinor, configuredRate)
       : null;
 
