@@ -88,6 +88,21 @@ export function toLocalDate(isoUtc: string, timezone: string): string {
   return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
+const MS_PER_DAY = 86_400_000;
+
+// Whole calendar days from one "YYYY-MM-DD" to another: daysBetween("2026-10-17", "2026-10-30") is 13.
+export function daysBetween(from: string, to: string): number {
+  return (toUtcMidnight(to) - toUtcMidnight(from)) / MS_PER_DAY;
+}
+
+// setUTCFullYear, unlike Date.UTC, keeps years 0-99 as they are instead of mapping them to 1900-1999.
+function toUtcMidnight(isoDate: string): number {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  return date.getTime();
+}
+
 function deepFreeze<T>(value: T): T {
   if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
     Object.freeze(value);

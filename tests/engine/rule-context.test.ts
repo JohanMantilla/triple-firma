@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildRuleContext, toPeriod } from "@/engine/rule-context";
+import { buildRuleContext, daysBetween, toPeriod } from "@/engine/rule-context";
 import { buildInvoice, buildRulesConfig, NOW } from "./fixtures";
 
 function invoiceWith(amountMinor: number | null, currency: string | null) {
@@ -89,5 +89,21 @@ describe("toPeriod", () => {
     ["a year above 9999", "9999-12-31T23:00:00Z", "Asia/Tokyo"],
   ])("throws for %s instead of returning a malformed period", (_case, isoUtc, timezone) => {
     expect(() => toPeriod(isoUtc, timezone)).toThrow();
+  });
+});
+
+describe("daysBetween", () => {
+  it.each([
+    ["the same day", "2026-10-17", "2026-10-17", 0],
+    ["a later day", "2026-10-17", "2026-10-30", 13],
+    ["an earlier day", "2026-10-17", "2026-10-11", -6],
+    ["the end of daylight saving time in New York", "2026-10-31", "2026-11-02", 2],
+    ["the start of daylight saving time in New York", "2026-03-07", "2026-03-09", 2],
+    ["a month change", "2026-10-30", "2026-11-03", 4],
+    ["a leap day", "2028-02-28", "2028-03-01", 2],
+    ["a year change", "2026-12-31", "2027-01-01", 1],
+    ["a year below 100, kept as is", "0050-01-01", "0050-01-31", 30],
+  ])("counts whole calendar days across %s", (_case, from, to, days) => {
+    expect(daysBetween(from, to)).toBe(days);
   });
 });

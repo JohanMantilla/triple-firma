@@ -1,0 +1,273 @@
+{
+  "_comment": "Borrador del Rol C alineado a la propuesta Triple Firma §3. Montos en centavos enteros. A (contracts/RulesConfig) decide la forma final del esquema; los VALORES son la referencia de la empresa ficticia.",
+  "version": "company-v1",
+  "company": {
+    "name": "Andes Labs Inc.",
+    "incorporation": "Delaware, EE. UU. (ficticia)",
+    "baseCurrency": "USD",
+    "timezone": "America/New_York"
+  },
+  "evaluationDate": "2026-10-17",
+  "budget": {
+    "period": "monthly",
+    "amountMinor": 2000000,
+    "pendingEscalationsReserveBudget": true
+  },
+  "approvalThresholdMinor": 200000,
+  "absoluteCap": {
+    "enabled": false,
+    "amountMinor": null
+  },
+  "fx": {
+    "unit": "unidades locales por 1 USD",
+    "rates": {
+      "USD": "1",
+      "COP": "4000",
+      "MXN": "20",
+      "ARS": "1000"
+    },
+    "rounding": "against_payment_ceil_to_cent"
+  },
+  "rules": {
+    "R2_duplicate": {
+      "exactKey": [
+        "beneficiary",
+        "amountMinor",
+        "currency",
+        "reference"
+      ],
+      "normalization": "trim + espacios colapsados + minúsculas (la puntuación y los acentos SÍ cuentan)"
+    },
+    "R3_beneficiary": {
+      "normalization": "trim + espacios colapsados + minúsculas (la puntuación y los acentos SÍ cuentan)"
+    },
+    "R4_agreement": {
+      "toleranceMinor": 0,
+      "chargesMore": "BLOCK",
+      "chargesLess": "ESCALATE",
+      "noAgreement": "ESCALATE"
+    },
+    "R5_perPayment": {
+      "comparison": "amountUsd > approvalThreshold  (igual al umbral NO escala)"
+    },
+    "R7_splitting": {
+      "windowDays": 7,
+      "thresholdMinor": 200000,
+      "counts": "pagos + escaladas pendientes del mismo beneficiario"
+    },
+    "R9_dates": {
+      "maxOverdueDays": 30,
+      "maxFutureDays": 90
+    }
+  },
+  "beneficiaries": [
+    {
+      "id": "B01",
+      "name": "Dev Partners SAS",
+      "country": "Colombia",
+      "currency": "COP",
+      "status": "allowed"
+    },
+    {
+      "id": "B02",
+      "name": "Café Andino SAS",
+      "country": "Colombia",
+      "currency": "COP",
+      "status": "allowed"
+    },
+    {
+      "id": "B03",
+      "name": "Luna Diseño SA de CV",
+      "country": "México",
+      "currency": "MXN",
+      "status": "allowed"
+    },
+    {
+      "id": "B04",
+      "name": "Pampa Datos SRL",
+      "country": "Argentina",
+      "currency": "ARS",
+      "status": "allowed"
+    },
+    {
+      "id": "B05",
+      "name": "Quito QA Cía. Ltda.",
+      "country": "Ecuador",
+      "currency": "USD",
+      "status": "allowed"
+    },
+    {
+      "id": "B06",
+      "name": "Sierra Legal Asociados SC",
+      "country": "México",
+      "currency": "MXN",
+      "status": "allowed"
+    },
+    {
+      "id": "B07",
+      "name": "Brisa Studio SA de CV",
+      "country": "México",
+      "currency": "MXN",
+      "status": "allowed"
+    },
+    {
+      "id": "B08",
+      "name": "Ñandú Contadores SRL",
+      "country": "Argentina",
+      "currency": "ARS",
+      "status": "allowed"
+    },
+    {
+      "id": "B09",
+      "name": "Altamar Consultores SAS",
+      "country": "Colombia",
+      "currency": "COP",
+      "status": "allowed"
+    },
+    {
+      "id": "B10",
+      "name": "Faro Soporte Cía. Ltda.",
+      "country": "Ecuador",
+      "currency": "USD",
+      "status": "allowed"
+    },
+    {
+      "id": "B11",
+      "name": "Cumbre Cloud Servicios SAS",
+      "country": "Colombia",
+      "currency": "COP",
+      "status": "allowed"
+    },
+    {
+      "id": "B12",
+      "name": "Meseta Medios SAS",
+      "country": "Colombia",
+      "currency": "COP",
+      "status": "allowed"
+    },
+    {
+      "id": "B13",
+      "name": "Lomas Analítica SA de CV",
+      "country": "México",
+      "currency": "MXN",
+      "status": "allowed"
+    },
+    {
+      "id": "B14",
+      "name": "Tierra Verde Logística SAS",
+      "country": "Colombia",
+      "currency": "COP",
+      "status": "blocked"
+    }
+  ],
+  "agreements": [
+    {
+      "beneficiaryId": "B01",
+      "beneficiary": "Dev Partners SAS",
+      "kind": "monthly",
+      "amountMinor": 720000000,
+      "currency": "COP",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    },
+    {
+      "beneficiaryId": "B02",
+      "beneficiary": "Café Andino SAS",
+      "kind": "monthly",
+      "amountMinor": 120000000,
+      "currency": "COP",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    },
+    {
+      "beneficiaryId": "B03",
+      "beneficiary": "Luna Diseño SA de CV",
+      "kind": "monthly",
+      "amountMinor": 3000000,
+      "currency": "MXN",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    },
+    {
+      "beneficiaryId": "B04",
+      "beneficiary": "Pampa Datos SRL",
+      "kind": "monthly",
+      "amountMinor": 150000000,
+      "currency": "ARS",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    },
+    {
+      "beneficiaryId": "B05",
+      "beneficiary": "Quito QA Cía. Ltda.",
+      "kind": "monthly",
+      "amountMinor": 120000,
+      "currency": "USD",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    },
+    {
+      "beneficiaryId": "B06",
+      "beneficiary": "Sierra Legal Asociados SC",
+      "kind": "monthly",
+      "amountMinor": 7000000,
+      "currency": "MXN",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    },
+    {
+      "beneficiaryId": "B07",
+      "beneficiary": "Brisa Studio SA de CV",
+      "kind": "per_invoice",
+      "amountMinor": 2200000,
+      "currency": "MXN",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    },
+    {
+      "beneficiaryId": "B08",
+      "beneficiary": "Ñandú Contadores SRL",
+      "kind": "monthly",
+      "amountMinor": 90000000,
+      "currency": "ARS",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    },
+    {
+      "beneficiaryId": "B10",
+      "beneficiary": "Faro Soporte Cía. Ltda.",
+      "kind": "monthly",
+      "amountMinor": 60000,
+      "currency": "USD",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    },
+    {
+      "beneficiaryId": "B11",
+      "beneficiary": "Cumbre Cloud Servicios SAS",
+      "kind": "monthly",
+      "amountMinor": 1000000000,
+      "currency": "COP",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    },
+    {
+      "beneficiaryId": "B12",
+      "beneficiary": "Meseta Medios SAS",
+      "kind": "monthly",
+      "amountMinor": 600000000,
+      "currency": "COP",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    },
+    {
+      "beneficiaryId": "B13",
+      "beneficiary": "Lomas Analítica SA de CV",
+      "kind": "per_invoice",
+      "amountMinor": 4000002,
+      "currency": "MXN",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    }
+  ]
+}

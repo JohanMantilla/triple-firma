@@ -1,5 +1,6 @@
 import type { RuleResult } from "@/contracts/decision";
 import { type HistoryEntry, isCountedInBudget } from "@/contracts/history";
+import type { Invoice } from "@/contracts/invoice";
 import { normalizePayee } from "@/contracts/payee";
 import { normalizeReference } from "@/contracts/reference";
 import { formatMoney } from "../format-money";
@@ -21,14 +22,107 @@ const STRENGTH: Record<MatchKind, number> = {
   UNREADABLE_REFERENCE: 3,
 };
 
-// R2: the invoice is compared with every past invoice of any period except itself. The same file, or
-// an exact duplicate (same payee, amount, currency and reference) of a payable or pending invoice
-// -> BLOCK. A near duplicate, a match with a rejected or blocked invoice, or a match where a reference
-// could not be read -> ESCALATE: a person decides, and nothing is presented as fraud.
+// R2: the invoice is compared with every past invoice of any period. The same file, or an exact
+// duplicate (same payee, amount, currency and reference) of a payable or pending invoice -> BLOCK.
+// A near duplicate, a match with a rejected or blocked invoice, or a match where a reference could not
+// be read -> ESCALATE: a person decides, and nothing is presented as fraud.
+//
+// Its own entry decides what a new decision of the same invoice means. Once PAYABLE, REJECTED or
+// BLOCKED it is the same file, so a retry never pays twice. Still pending (same id, same file,
+// PENDING_APPROVAL), a person has not decided yet: a retry escalates instead of paying behind their
+// back, and does not block, which would leave a stored block in the way of approving the original.
+// Ids come from outside the engine, so the same id with another file is compared like any other.
 export function evaluateDuplicateRule(ctx: RuleContext): RuleResult {
-  const { invoice, config, history } = ctx;
+  const ownPending = ctx.history.find((entry) => isOwnPendingEntry(entry, ctx.invoice));
+  const others = ctx.history.filter((entry) => !isOwnPendingEntry(entry, ctx.invoice));
+  const comparison = compareWithHistory(ctx, others);
+  if (ownPending === undefined || comparison.outcome === "BLOCK") return comparison;
+  return {
+    ruleId: "R2",
+    outcome: "ESCALATE",
+    message: MESSAGES.duplicate.alreadyPending(ownPending.invoiceId),
+    compared: {
+      matchType: "OWN_PENDING",
+      matchedInvoiceId: ownPending.invoiceId,
+      matchedStatus: ownPending.status,
+      matchedReference: ownPending.reference,
+    },
+  };
+}
+
+// R2 at approval (invariant 8): it can only pass or block, so it blocks only what is the same invoice.
+// The same file, or a PAYABLE invoice with the same reference (ignoring format and the zeros that start
+// a number after a letter: "FAC-0102" is "FAC-102"), amount and currency, from the same payee or with either payee unreadable,
+// blocks, however uncertain the reading and whenever it was paid, so the same invoice is never paid
+// twice. A near reference ("FAC-102" vs "FAC-103": two fixed monthly fees), matches with rejected or
+// blocked invoices, an unreadable reference and other pending escalations are left to the approver,
+// who saw R2's report. A BLOCKED or REJECTED entry of the same file passes, so a retry never makes the
+// original escalation impossible to approve.
+export function checkDuplicateOnApproval(ctx: RuleContext): RuleResult {
+  const payable = ctx.history.filter((entry) => entry.status === "PAYABLE");
+  const comparison = compareWithHistory(ctx, payable);
+  if (comparison.outcome === "BLOCK") return comparison;
+  const copy = findPaidSameReference(ctx, payable);
+  if (copy !== undefined) {
+    const { amountMinor, currency } = ctx.invoice.extraction;
+    return {
+      ruleId: "R2",
+      outcome: "BLOCK",
+      message: MESSAGES.duplicate.paidSameReference(
+        copy.reference,
+        formatMoney(amountMinor.value ?? 0, currency.value ?? ""),
+        toLocalDate(copy.decidedAt, ctx.config.timezone),
+      ),
+      compared: {
+        matchType: "SAME_REFERENCE",
+        matchedInvoiceId: copy.invoiceId,
+        matchedStatus: copy.status,
+        matchedReference: copy.reference,
+      },
+    };
+  }
+  return {
+    ruleId: "R2",
+    outcome: "PASS",
+    message: MESSAGES.duplicate.noneOnApproval,
+    compared: {
+      matchType: "NONE",
+      matchedInvoiceId: null,
+      matchedStatus: null,
+      matchedReference: null,
+    },
+  };
+}
+
+function findPaidSameReference(
+  ctx: RuleContext,
+  payable: readonly HistoryEntry[],
+): HistoryEntry | undefined {
+  const { payee, amountMinor, currency, reference } = ctx.invoice.extraction;
+  if (reference.value === null) return undefined;
+  const target = withoutLeadingZeros(normalizeReference(reference.value));
+  const isSamePayee = (entryPayee: string | null) =>
+    entryPayee === null ||
+    payee.value === null ||
+    normalizePayee(entryPayee) === normalizePayee(payee.value);
+  return payable.find(
+    (entry) =>
+      entry.amountMinor === amountMinor.value &&
+      entry.currency === currency.value &&
+      entry.reference !== null &&
+      isSamePayee(entry.payee) &&
+      withoutLeadingZeros(normalizeReference(entry.reference)) === target,
+  );
+}
+
+// Zeros that start a number after a letter: "FAC0102" -> "FAC102". "FAC120" keeps its zero.
+function withoutLeadingZeros(normalizedReference: string): string {
+  return normalizedReference.replace(/(?<!\d)0+(?=\d)/g, "");
+}
+
+function compareWithHistory(ctx: RuleContext, others: readonly HistoryEntry[]): RuleResult {
+  const { invoice, config } = ctx;
   const { payee, amountMinor, currency, reference } = invoice.extraction;
-  const others = history.filter((entry) => entry.invoiceId !== invoice.id);
   const result = (
     outcome: RuleResult["outcome"],
     message: string,
@@ -191,4 +285,13 @@ function hasForeignDigits(normalizedReference: string): boolean {
 // the safe direction: it only applies to the same payee, amount and currency, and only escalates.
 function withoutZeros(normalizedReference: string): string {
   return normalizedReference.replaceAll("0", "");
+}
+
+// This invoice's own escalation, still waiting for a person to approve or reject it.
+export function isOwnPendingEntry(entry: HistoryEntry, invoice: Invoice): boolean {
+  return (
+    entry.invoiceId === invoice.id &&
+    entry.fileHash === invoice.fileHash &&
+    entry.status === "PENDING_APPROVAL"
+  );
 }

@@ -171,5 +171,18 @@ Conventional Commits, in English: `<type>(<scope>): <description>`.
 - Imperative, lowercase, no trailing period, 72 characters max. One logical change per commit, leaving tests green. Never `wip`, `fix stuff`, `changes` or `update`.
 - Breaking contract change: `feat(contracts)!: ...`, only with A's approval.
 - Branches: `<type>/<scope>-<topic>`, short-lived (hours), e.g. `feat/engine-duplicate-rule`.
-- PR title equals the commit message. Squash merge to `main` with green CI. PRs to `engine/` and `contracts/` need a second reviewer plus the `rules-auditor` subagent.
+- PR title equals the commit message, because it becomes the commit on `main`. PRs to `engine/` and `contracts/` need a second reviewer plus the `rules-auditor` subagent.
+- Merge only with **Squash and merge**, keeping the PR title as the message, with green CI. Merge commits and rebase merging are disabled on GitHub; `main` only accepts PRs.
+- Never commit with "Add files via upload" or edit files in the GitHub web editor: always a branch, a commit and a PR, even for data files.
+- CI rejects a PR whose title or branch name breaks these rules (`.github/workflows/ci.yml`).
+
+**Mandatory for Claude:** before proposing a commit, a push or a PR, check the branch name and the title against these rules. If they do not match, stop and propose the correct name (rename a branch with `git branch -m <type>/<scope>-<topic>`). When handing over a PR, tell the person to merge it with "Squash and merge", keeping the title. Never suggest uploading files through the GitHub web interface.
+
+| Correct                                             | Wrong                                          |
+| --------------------------------------------------- | ---------------------------------------------- |
+| `feat(data): add dev invoice set`                   | `Add files via upload`                         |
+| branch `feat/data-dev-invoices`                     | branch `rol-c-datos`                           |
+| `fix(extraction): parse comma as decimal separator` | `Merge pull request #27 from …` (merge commit) |
+| `docs: add readme with setup steps`                 | `Update README.md`, `cambios`, `wip`           |
+
 - The exact planned commit list per person is in `docs/PROPUESTA.md` section 7.
