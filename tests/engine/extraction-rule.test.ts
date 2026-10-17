@@ -81,6 +81,46 @@ describe("evaluateExtractionRule (R1)", () => {
     });
   });
 
+  it("escalates a payee whose evidence names someone else, even in a PDF", () => {
+    const invoice = withField("payee", { evidence: "From: Shady LLC" });
+    expect(evaluate(invoice)).toMatchObject({
+      outcome: "ESCALATE",
+      message: "R1: la evidencia no respalda el valor leído de: Beneficiario.",
+      compared: { valueNotSupported: "payee" },
+    });
+  });
+
+  it("escalates an amount that its evidence does not show, so it cannot dodge the threshold", () => {
+    const invoice = withField("amountMinor", { value: 2_500 });
+    expect(evaluate(invoice)).toMatchObject({
+      outcome: "ESCALATE",
+      compared: { valueNotSupported: "amountMinor" },
+    });
+  });
+
+  it("escalates a reference that only partially matches its evidence", () => {
+    const invoice = withField("reference", { value: "INV-10" });
+    expect(evaluate(invoice)).toMatchObject({
+      outcome: "ESCALATE",
+      compared: { valueNotSupported: "reference" },
+    });
+  });
+
+  it.each(["currency", "dueDate"] as const)(
+    "escalates a %s whose raw text is missing from its evidence",
+    (field) => {
+      expect(evaluate(withField(field, { raw: "XYZ" }))).toMatchObject({
+        outcome: "ESCALATE",
+        compared: { valueNotSupported: field },
+      });
+    },
+  );
+
+  it("escalates evidence too short to support the value", () => {
+    const invoice = withField("payee", { evidence: "D" });
+    expect(evaluate(invoice).outcome).toBe("ESCALATE");
+  });
+
   it("does not search the evidence in a PDF, which has no original text", () => {
     expect(evaluate(buildInvoice({ sourceFormat: "PDF", sourceText: null })).outcome).toBe("PASS");
   });

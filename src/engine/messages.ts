@@ -21,6 +21,7 @@ export const MESSAGES = {
     passed: "R1: los datos obligatorios se leyeron con certeza y con evidencia.",
     unreadable: (labels: string) => `no se pudo leer con certeza: ${labels}.`,
     withoutEvidence: (labels: string) => `falta la evidencia de: ${labels}.`,
+    valueNotSupported: (labels: string) => `la evidencia no respalda el valor leído de: ${labels}.`,
     evidenceNotInSource: (labels: string) =>
       `la evidencia de ${labels} no aparece en el texto original.`,
     escalated: (reasons: readonly string[]) => `R1: ${reasons.join(" ")}`,
