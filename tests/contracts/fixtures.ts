@@ -45,6 +45,12 @@ export function buildExtraction(): Extraction {
       isUncertain: false,
     },
     currency: { raw: "USD", value: "USD", evidence: "Total: USD 2,500.00", isUncertain: false },
+    issueDate: {
+      raw: "Oct 1, 2026",
+      value: "2026-10-01",
+      evidence: "Date: Oct 1, 2026",
+      isUncertain: false,
+    },
     dueDate: {
       raw: "Oct 30, 2026",
       value: "2026-10-30",

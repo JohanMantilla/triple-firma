@@ -30,6 +30,17 @@ describe("ExtractionSchema", () => {
     expect(ExtractionSchema.safeParse(extraction).success).toBe(false);
   });
 
+  it("rejects an extraction without the issue date field", () => {
+    const { issueDate: _omitted, ...withoutIssueDate } = buildExtraction();
+    expect(ExtractionSchema.safeParse(withoutIssueDate).success).toBe(false);
+  });
+
+  it("accepts an unreadable issue date, so R4 can escalate it", () => {
+    const extraction = buildExtraction();
+    extraction.issueDate = { raw: null, value: null, evidence: null, isUncertain: true };
+    expect(ExtractionSchema.safeParse(extraction).success).toBe(true);
+  });
+
   it("rejects a due date that is not ISO", () => {
     const extraction = buildExtraction();
     extraction.dueDate = { ...extraction.dueDate, value: "30/10/2026" };
