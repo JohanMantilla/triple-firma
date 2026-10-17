@@ -3,6 +3,7 @@ import type { SourceFormat } from "@/contracts/invoice";
 import type { AnthropicClient } from "./anthropic-client";
 import { READER_MODEL } from "./anthropic-client";
 import { READER_SYSTEM_PROMPT_V1, READER_RESPONSE_JSON_SCHEMA } from "./prompts/reader-v1";
+import { READER_SYSTEM_PROMPT_V2 } from "./prompts/reader-v2";
 
 // ── Schema for the raw LLM response ─────────────────────────────────────────
 // Values are strings here; the normalizer (normalize-extraction.ts) converts them to the
@@ -92,17 +93,27 @@ function buildContent(
 
 // ── Reader ───────────────────────────────────────────────────────────────────
 
+export const READER_PROMPTS = {
+  v1: READER_SYSTEM_PROMPT_V1,
+  v2: READER_SYSTEM_PROMPT_V2,
+} as const;
+export type ReaderPromptVersion = keyof typeof READER_PROMPTS;
+
+// v1 stays the default until v2 beats it on the dev set (docs/PROPUESTA.md section 7).
+export const DEFAULT_READER_PROMPT_VERSION: ReaderPromptVersion = "v1";
+
 export async function readInvoice(
   client: AnthropicClient,
   fileBuffer: Buffer,
   sourceFormat: SourceFormat,
   sourceText: string | null,
+  promptVersion: ReaderPromptVersion = DEFAULT_READER_PROMPT_VERSION,
 ): Promise<ReadResult> {
   try {
     const message = await client.messages.create({
       model: READER_MODEL,
       max_tokens: 2048,
-      system: READER_SYSTEM_PROMPT_V1,
+      system: READER_PROMPTS[promptVersion],
       // Structured output guarantees a valid JSON object matching the schema.
       output_config: { format: { type: "json_schema", schema: READER_RESPONSE_JSON_SCHEMA } },
       messages: [{ role: "user", content: buildContent(fileBuffer, sourceFormat, sourceText) }],

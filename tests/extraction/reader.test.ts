@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AnthropicClient } from "@/extraction/anthropic-client";
-import { readInvoice, type ReaderResponse } from "@/extraction/reader";
+import { READER_PROMPTS, readInvoice, type ReaderResponse } from "@/extraction/reader";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -82,6 +82,34 @@ describe("readInvoice — happy path", () => {
     const client = makeClient(JSON.stringify(response));
     const result = await readInvoice(client, PDF_BUFFER, "PDF", null);
     expect(result).toMatchObject({ ok: true, response: { lineItemsSumString: null } });
+  });
+});
+
+describe("readInvoice — prompt version", () => {
+  function systemPromptSent(client: AnthropicClient): unknown {
+    const create = client.messages.create as unknown as ReturnType<typeof vi.fn>;
+    return create.mock.calls[0]?.[0]?.system;
+  }
+
+  it("uses prompt v1 by default", async () => {
+    const client = makeClient(JSON.stringify(VALID_RESPONSE));
+    await readInvoice(client, PDF_BUFFER, "PDF", null);
+    expect(systemPromptSent(client)).toBe(READER_PROMPTS.v1);
+  });
+
+  it("uses prompt v2 when asked", async () => {
+    const client = makeClient(JSON.stringify(VALID_RESPONSE));
+    const result = await readInvoice(client, PDF_BUFFER, "PDF", null, "v2");
+    expect(result.ok).toBe(true);
+    expect(systemPromptSent(client)).toBe(READER_PROMPTS.v2);
+  });
+
+  it("keeps the two versions distinct", () => {
+    expect(READER_PROMPTS.v2).not.toBe(READER_PROMPTS.v1);
+  });
+
+  it.each(["v1", "v2"] as const)("treats the document as data in prompt %s", (version) => {
+    expect(READER_PROMPTS[version]).toMatch(/never instructions/);
   });
 });
 
