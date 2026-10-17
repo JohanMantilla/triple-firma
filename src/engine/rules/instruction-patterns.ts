@@ -79,6 +79,11 @@ const WORD_PATTERNS: readonly (readonly [InstructionPatternId, RegExp])[] = [
 const ROLE_MARKER_PATTERN =
   /<\s*(?:\/\s*)?(?:system|assistant|user|instructions?|prompt)\s*>|<\|\s*(?:im_start|im_end|system|endoftext)\s*\|>|\[\s*(?:\/\s*)?(?:inst|system|sys)\s*\]|<<\s*(?:\/\s*)?sys\s*>>|^[ \t]*(?:system|assistant)[ \t]*:/m;
 
+// Format characters, Hangul fillers (letters that render as nothing) and control characters other
+// than tabs and line breaks are removed, so they cannot split a word: "ign" + U+3164 + "ore".
+const INVISIBLE_CHARACTERS =
+  /[\p{Cf}\u115F\u1160\u3164\uFFA0\u0000-\u0008\u000E-\u001F\u007F-\u0084\u0086-\u009F]/gu;
+
 // Invisible characters, compatibility forms, case, accents and lookalike letters from other scripts
 // never hide a phrase: a zero-width space inside a word, "aprobación" and a Cyrillic i read the same
 // as plain Latin text.
@@ -86,7 +91,7 @@ function foldText(text: string): string {
   return replaceLookalikeLetters(
     text
       .normalize("NFKC")
-      .replace(/\p{Cf}/gu, "")
+      .replace(INVISIBLE_CHARACTERS, "")
       .toLowerCase()
       .normalize("NFD")
       .replace(/\p{M}/gu, ""),
