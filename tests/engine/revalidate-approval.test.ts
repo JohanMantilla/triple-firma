@@ -181,6 +181,48 @@ describe("revalidateApproval", () => {
     });
   });
 
+  describe("boundaries", () => {
+    it("counts the budget of the approval's local month at a month change", () => {
+      const history = [pendingEntry(), committedLeaving(0)];
+      // 2026-11-01 03:30 UTC is still October 31 in New York; 05:00 UTC is November 1.
+      expect(resolve({ history, now: "2026-11-01T03:30:00Z" }).resultingOutcome).toBe("BLOCK");
+      expect(resolve({ history, now: "2026-11-01T05:00:00Z" }).resultingOutcome).toBe("PAY");
+    });
+
+    it("blocks an exact copy paid in an earlier period: duplicates are checked across all periods", () => {
+      const paidInAugust = buildHistoryEntry({
+        invoiceId: "inv-0",
+        reference: "INV-102",
+        amountMinor: 250_000,
+        baseAmountMinor: 250_000,
+        period: "2026-08",
+        decidedAt: "2026-08-12T14:00:00Z",
+      });
+      expect(resolve({ history: [pendingEntry(), paidInAugust] }).resultingOutcome).toBe("BLOCK");
+    });
+
+    it("blocks an exact copy even when the escalated invoice was read with uncertain fields", () => {
+      const invoice = buildInvoice();
+      invoice.extraction.payee = { ...invoice.extraction.payee, isUncertain: true };
+      invoice.extraction.reference = { ...invoice.extraction.reference, isUncertain: true };
+      const paidCopy = buildHistoryEntry({
+        invoiceId: "inv-0",
+        reference: "INV-102",
+        amountMinor: 250_000,
+        baseAmountMinor: 250_000,
+      });
+      expect(resolve({ invoice, history: [pendingEntry(), paidCopy] })).toMatchObject({
+        resultingOutcome: "BLOCK",
+        revalidationResults: [{ ruleId: "R2", outcome: "BLOCK" }, { ruleId: "R6" }],
+      });
+    });
+
+    it("uses the budget configured at approval, lowered since the escalation", () => {
+      expect(resolve({ config: { monthlyBudgetMinor: 249_999 } }).resultingOutcome).toBe("BLOCK");
+      expect(resolve({ config: { monthlyBudgetMinor: 250_000 } }).resultingOutcome).toBe("PAY");
+    });
+  });
+
   describe("money stored in the decision (task 1)", () => {
     // COP 4,000,000.00 escalated at 4000 COP per USD: USD 1,000.00. The rate is now 8000.
     const invoice = buildInvoice();
