@@ -13,11 +13,26 @@ const FIELD = {
 
 const VALID_RESPONSE: ReaderResponse = {
   payee: FIELD,
-  amountString: { raw: "USD 2,500.00", value: "2500.00", evidence: "Total: USD 2,500.00", isUncertain: false },
+  amountString: {
+    raw: "USD 2,500.00",
+    value: "2500.00",
+    evidence: "Total: USD 2,500.00",
+    isUncertain: false,
+  },
   currencyRaw: { raw: "USD", value: "USD", evidence: "Total: USD 2,500.00", isUncertain: false },
-  dueDateString: { raw: "Oct 30, 2026", value: "2026-10-30", evidence: "Due: Oct 30, 2026", isUncertain: false },
+  dueDateString: {
+    raw: "Oct 30, 2026",
+    value: "2026-10-30",
+    evidence: "Due: Oct 30, 2026",
+    isUncertain: false,
+  },
   reference: { raw: "INV-102", value: "INV-102", evidence: "Invoice INV-102", isUncertain: false },
-  lineItemsSumString: { raw: "USD 2,500.00", value: "2500.00", evidence: "Subtotal: USD 2,500.00", isUncertain: false },
+  lineItemsSumString: {
+    raw: "USD 2,500.00",
+    value: "2500.00",
+    evidence: "Subtotal: USD 2,500.00",
+    isUncertain: false,
+  },
   suspiciousText: [],
 };
 

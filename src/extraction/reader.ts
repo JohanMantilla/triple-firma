@@ -5,7 +5,7 @@ import { READER_MODEL } from "./anthropic-client";
 import { READER_SYSTEM_PROMPT_V1, READER_RESPONSE_JSON_SCHEMA } from "./prompts/reader-v1";
 
 // ── Schema for the raw LLM response ─────────────────────────────────────────
-// Values are strings here; the normalizer (normalizer.ts) converts them to the
+// Values are strings here; the normalizer (normalize-extraction.ts) converts them to the
 // typed values required by ExtractionSchema (minor units, ISO dates, etc.).
 
 const ReaderFieldSchema = z.object({
@@ -27,9 +27,7 @@ export const ReaderResponseSchema = z.object({
 });
 export type ReaderResponse = z.infer<typeof ReaderResponseSchema>;
 
-export type ReadResult =
-  | { ok: true; response: ReaderResponse }
-  | { ok: false; reason: string };
+export type ReadResult = { ok: true; response: ReaderResponse } | { ok: false; reason: string };
 
 // ── Content builder ──────────────────────────────────────────────────────────
 
@@ -63,7 +61,11 @@ function buildContent(
     return [
       {
         type: "document",
-        source: { type: "base64", media_type: "application/pdf", data: fileBuffer.toString("base64") },
+        source: {
+          type: "base64",
+          media_type: "application/pdf",
+          data: fileBuffer.toString("base64"),
+        },
       },
       instruction,
     ];
@@ -73,17 +75,18 @@ function buildContent(
     return [
       {
         type: "image",
-        source: { type: "base64", media_type: detectImageMediaType(fileBuffer), data: fileBuffer.toString("base64") },
+        source: {
+          type: "base64",
+          media_type: detectImageMediaType(fileBuffer),
+          data: fileBuffer.toString("base64"),
+        },
       },
       instruction,
     ];
   }
 
   // EMAIL or CHAT: contracts guarantee sourceText is non-null and non-empty.
-  return [
-    { type: "text", text: `Invoice content:\n\n${sourceText ?? ""}` },
-    instruction,
-  ];
+  return [{ type: "text", text: `Invoice content:\n\n${sourceText ?? ""}` }, instruction];
 }
 
 // ── Reader ───────────────────────────────────────────────────────────────────
@@ -111,7 +114,10 @@ export async function readInvoice(
 
     const parsed = ReaderResponseSchema.safeParse(JSON.parse(textBlock.text));
     if (!parsed.success) {
-      return { ok: false, reason: `Reader response failed schema validation: ${parsed.error.message}` };
+      return {
+        ok: false,
+        reason: `Reader response failed schema validation: ${parsed.error.message}`,
+      };
     }
 
     return { ok: true, response: parsed.data };
