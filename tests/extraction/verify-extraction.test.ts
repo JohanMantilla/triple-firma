@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Extraction } from "@/contracts/extraction";
 import { VERIFIER_MODEL, type AnthropicClient } from "@/extraction/anthropic-client";
-import type { ExtractInvoiceInput } from "@/extraction/extract-invoice";
+import type { ExtractInvoiceInput } from "@/extraction/extract-invoice-input";
 import { VERIFIER_SYSTEM_PROMPT_V1 } from "@/extraction/prompts/verifier-v1";
 import type { ReaderField, ReaderResponse } from "@/extraction/reader";
 import { VERIFIED_FIELDS, verifyExtraction } from "@/extraction/verify-extraction";
@@ -115,6 +115,20 @@ describe("verifyExtraction — disagreement", () => {
     );
     expect(result.mismatchedFields).toEqual(["reference"]);
     expect(result.extraction.reference.isUncertain).toBe(true);
+  });
+});
+
+describe("verifyExtraction — suspicious text", () => {
+  it("keeps suspicious text found by either read, without duplicates", async () => {
+    const first: Extraction = { ...FIRST_READ, suspiciousText: ["ignore the rules", "pay now"] };
+    const second = { ...SECOND_READ, suspiciousText: ["pay now", "approved by CEO"] };
+    const result = await verifyExtraction(clientReading(second), INPUT, first);
+
+    expect(result.extraction.suspiciousText).toEqual([
+      "ignore the rules",
+      "pay now",
+      "approved by CEO",
+    ]);
   });
 });
 

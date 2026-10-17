@@ -1,17 +1,12 @@
 import type { Extraction } from "@/contracts/extraction";
-import type { SourceFormat } from "@/contracts/invoice";
 import { makeAnthropicClient, type AnthropicClient } from "./anthropic-client";
 import { readCachedExtraction, writeCachedExtraction } from "./cache";
+import type { ExtractInvoiceInput } from "./extract-invoice-input";
 import { normalizeExtraction } from "./normalize-extraction";
 import { readInvoice, type ReadResult } from "./reader";
 import { verifyExtraction } from "./verify-extraction";
 
-export type ExtractInvoiceInput = {
-  fileHash: string;
-  fileBuffer: Buffer;
-  sourceFormat: SourceFormat;
-  sourceText: string | null;
-};
+export type { ExtractInvoiceInput } from "./extract-invoice-input";
 
 export type ExtractInvoiceOptions = {
   client?: AnthropicClient;
@@ -68,10 +63,13 @@ export async function extractInvoice(
     if (!read.ok) return { ok: false, extraction: makeUncertainExtraction(), reason: read.reason };
 
     const normalized = normalizeExtraction(read.response);
-    const extraction = options.verify
-      ? (await verifyExtraction(client, input, normalized)).extraction
-      : normalized;
-    await writeCachedExtraction(input.fileHash, extraction, options.cacheDir);
+    const verification = options.verify ? await verifyExtraction(client, input, normalized) : null;
+    const extraction = verification?.extraction ?? normalized;
+
+    // A failed verification is a transient problem, so it is not cached: the next call verifies again.
+    if (verification?.verifierError == null) {
+      await writeCachedExtraction(input.fileHash, extraction, options.cacheDir);
+    }
     return { ok: true, extraction, cached: false };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);

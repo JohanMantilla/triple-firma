@@ -2,7 +2,7 @@ import type { Extraction } from "@/contracts/extraction";
 import { normalizePayee } from "@/contracts/payee";
 import { normalizeReference } from "@/contracts/reference";
 import { VERIFIER_MODEL, type AnthropicClient } from "./anthropic-client";
-import type { ExtractInvoiceInput } from "./extract-invoice";
+import type { ExtractInvoiceInput } from "./extract-invoice-input";
 import { normalizeExtraction } from "./normalize-extraction";
 import { VERIFIER_SYSTEM_PROMPT_V1 } from "./prompts/verifier-v1";
 import { readDocument } from "./reader";
@@ -82,8 +82,10 @@ export async function verifyExtraction(
 
   const second = normalizeExtraction(read.response);
   const mismatchedFields = VERIFIED_FIELDS.filter((field) => !agrees(field, extraction, second));
+  // Suspicious text found by either read is kept: it can only make the outcome stricter.
+  const suspiciousText = [...new Set([...extraction.suspiciousText, ...second.suspiciousText])];
   return {
-    extraction: markUncertain(extraction, mismatchedFields),
+    extraction: { ...markUncertain(extraction, mismatchedFields), suspiciousText },
     mismatchedFields,
     verifierError: null,
   };

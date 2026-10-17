@@ -147,6 +147,18 @@ describe("extractInvoice — verification", () => {
     expect(result.extraction.payee.isUncertain).toBe(true);
     expect(result.extraction.amountMinor.isUncertain).toBe(true);
   });
+
+  it("does not cache the extraction when the verifier call fails, so the next call verifies again", async () => {
+    const failing = clientWithVerifier(new Error("API timeout"));
+    await extractInvoice(INPUT, { client: failing, cacheDir, verify: true });
+    expect(await readdir(cacheDir)).toEqual([]);
+
+    const working = clientWithVerifier(READER_RESPONSE);
+    const result = await extractInvoice(INPUT, { client: working, cacheDir, verify: true });
+    expect(result).toMatchObject({ ok: true, cached: false });
+    expect(result.extraction.amountMinor).toMatchObject({ value: 250000, isUncertain: false });
+    expect(await readdir(cacheDir)).toEqual([`${INPUT.fileHash}.json`]);
+  });
 });
 
 describe("extractInvoice — fail-safe", () => {
