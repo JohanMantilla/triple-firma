@@ -9,6 +9,20 @@ describe("normalizeReference", () => {
     },
   );
 
+  it.each([
+    "FAC\u2010102",
+    "FAC\u2011102",
+    "FAC\u2012102",
+    "FAC\u2013102",
+    "FAC\u2014102",
+    "FAC\u2015102",
+    "FAC\u2212102",
+    "FAC\uFE63102",
+    "FAC\uFF0D102",
+  ])("treats the Unicode dash or minus sign in %j as a separator", (reference) => {
+    expect(normalizeReference(reference)).toBe("FAC102");
+  });
+
   it("treats full-width characters as their regular form", () => {
     expect(normalizeReference("\uFF26\uFF21\uFF23\uFF0D\uFF11\uFF10\uFF12")).toBe("FAC102");
   });
