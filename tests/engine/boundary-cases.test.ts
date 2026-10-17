@@ -103,7 +103,9 @@ describe("boundary cases through the whole engine", () => {
 
   describe("hard cap (R5)", () => {
     it("escalates exactly the hard cap, which only needs approval", () => {
-      expect(stoppedBy(decide({ amountMinor: 1_000_000 }))).toEqual(["R5:ESCALATE"]);
+      const decision = decide({ amountMinor: 1_000_000 });
+      expect(stoppedBy(decision)).toEqual(["R5:ESCALATE"]);
+      expect(decision.outcome).toBe("ESCALATE");
     });
 
     it("blocks one cent above the hard cap, with no option to approve", () => {
@@ -142,16 +144,17 @@ describe("boundary cases through the whole engine", () => {
   });
 
   describe("period change in the company's time zone", () => {
-    // October's budget is fully committed. 2026-11-01 03:30 UTC is still October 31 in New York.
+    // October's budget is fully committed. Midnight of November 1 in New York is 04:00 UTC: daylight
+    // saving time ends later that day, so a fixed UTC-5 offset would get this second wrong.
     const history = [committed(2_000_000)];
 
-    it("still counts October at 23:30 on October 31 in New York (03:30 UTC on November 1)", () => {
-      const decision = decide({ amountMinor: 100_000, history, now: "2026-11-01T03:30:00Z" });
+    it("still counts October one second before midnight in New York (03:59:59 UTC)", () => {
+      const decision = decide({ amountMinor: 100_000, history, now: "2026-11-01T03:59:59Z" });
       expect(stoppedBy(decision)).toEqual(["R6:BLOCK"]);
     });
 
-    it("counts November once it is November 1 in New York", () => {
-      const decision = decide({ amountMinor: 100_000, history, now: "2026-11-01T05:00:00Z" });
+    it("counts November from midnight in New York (04:00:00 UTC)", () => {
+      const decision = decide({ amountMinor: 100_000, history, now: "2026-11-01T04:00:00Z" });
       expect(stoppedBy(decision)).toEqual([]);
       expect(decision.outcome).toBe("PAY");
     });
@@ -163,8 +166,21 @@ describe("boundary cases through the whole engine", () => {
       ["31 days overdue", "2026-09-16", "ESCALATE"],
       ["90 days ahead, the most the policy admits", "2027-01-15", "PAY"],
       ["91 days ahead", "2027-01-16", "ESCALATE"],
-    ])("%s", (_case, dueDate, outcome) => {
-      const decision = decide({ amountMinor: 100_000, dueDate });
+      // 02:00 UTC on October 18 is still October 17 in New York: "today" is the company's date.
+      [
+        "91 days ahead of the New York date, 90 of the UTC date",
+        "2027-01-16",
+        "ESCALATE",
+        "2026-10-18T02:00:00Z",
+      ],
+      [
+        "90 days ahead of the New York date, late in its evening",
+        "2027-01-15",
+        "PAY",
+        "2026-10-18T02:00:00Z",
+      ],
+    ])("%s", (_case, dueDate, outcome, now = NOW) => {
+      const decision = decide({ amountMinor: 100_000, dueDate, now });
       expect(stoppedBy(decision)).toEqual(outcome === "PAY" ? [] : ["R9:ESCALATE"]);
       expect(decision.outcome).toBe(outcome);
     });
