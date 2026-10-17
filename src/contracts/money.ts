@@ -12,6 +12,10 @@ export const SUPPORTED_CURRENCIES = ["USD", "COP", "MXN", "ARS"] as const;
 export const SupportedCurrencySchema = z.enum(SUPPORTED_CURRENCIES);
 export type SupportedCurrency = z.infer<typeof SupportedCurrencySchema>;
 
+export function isSupportedCurrency(code: string): code is SupportedCurrency {
+  return SupportedCurrencySchema.safeParse(code).success;
+}
+
 export const MinorAmountSchema = z.int().nonnegative();
 
 export const PositiveMinorAmountSchema = z.int().positive();

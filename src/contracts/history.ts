@@ -4,6 +4,7 @@ import { Sha256Schema } from "./invoice";
 import {
   CurrencyCodeSchema,
   ExchangeRateSchema,
+  isSupportedCurrency,
   MinorAmountSchema,
   PositiveMinorAmountSchema,
 } from "./money";
@@ -47,9 +48,12 @@ export const HistoryEntrySchema = z
   .refine(
     (entry) =>
       !isCountedInBudget(entry.status) ||
-      (entry.exchangeRate !== null && entry.baseAmountMinor !== null),
+      (isSupportedCurrency(entry.currency) &&
+        entry.exchangeRate !== null &&
+        entry.baseAmountMinor !== null),
     {
-      message: "Entries counted in the budget must record their exchange rate and base amount",
+      message:
+        "Entries counted in the budget must use a supported currency and record their exchange rate and base amount",
       path: ["baseAmountMinor"],
     },
   );

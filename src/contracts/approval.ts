@@ -4,6 +4,7 @@ import { type RuleId, RuleResultSchema } from "./decision";
 import {
   CurrencyCodeSchema,
   ExchangeRateSchema,
+  isSupportedCurrency,
   MinorAmountSchema,
   PositiveMinorAmountSchema,
 } from "./money";
@@ -38,13 +39,14 @@ export const ApprovalSchema = ApprovalRequestSchema.extend({
   const hasMoneyData =
     approval.amountMinor !== null &&
     approval.currency !== null &&
+    isSupportedCurrency(approval.currency) &&
     approval.exchangeRate !== null &&
     approval.baseAmountMinor !== null;
   if (approval.resultingOutcome === "PAY" && !hasMoneyData) {
     ctx.addIssue({
       code: "custom",
       message:
-        "An approval that pays must record its amount, currency, exchange rate and base amount",
+        "An approval that pays must record its amount, a supported currency, exchange rate and base amount",
       path: ["baseAmountMinor"],
     });
   }

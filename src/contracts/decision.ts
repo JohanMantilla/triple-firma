@@ -3,6 +3,7 @@ import { IsoDateTimeSchema } from "./dates";
 import {
   CurrencyCodeSchema,
   ExchangeRateSchema,
+  isSupportedCurrency,
   MinorAmountSchema,
   PositiveMinorAmountSchema,
 } from "./money";
@@ -72,12 +73,14 @@ export const DecisionSchema = z
       decision.outcome === "PAY" &&
       (decision.amountMinor === null ||
         decision.currency === null ||
+        !isSupportedCurrency(decision.currency) ||
         decision.baseAmountMinor === null ||
         decision.exchangeRate === null)
     ) {
       ctx.addIssue({
         code: "custom",
-        message: "A PAY decision must record its amount, currency, base amount and exchange rate",
+        message:
+          "A PAY decision must record its amount, a supported currency, base amount and exchange rate",
         path: ["baseAmountMinor"],
       });
     }

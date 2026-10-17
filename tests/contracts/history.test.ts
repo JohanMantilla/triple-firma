@@ -33,6 +33,26 @@ describe("HistoryEntrySchema", () => {
     },
   );
 
+  it.each(["PAYABLE", "PENDING_APPROVAL"])(
+    "rejects a %s entry in a currency outside the supported list",
+    (status) => {
+      expect(HistoryEntrySchema.safeParse({ ...entry, status, currency: "EUR" }).success).toBe(
+        false,
+      );
+    },
+  );
+
+  it("keeps a REJECTED invoice in an unsupported currency, so R2 can catch it", () => {
+    const rejected = {
+      ...entry,
+      status: "REJECTED",
+      currency: "EUR",
+      exchangeRate: null,
+      baseAmountMinor: null,
+    };
+    expect(HistoryEntrySchema.safeParse(rejected).success).toBe(true);
+  });
+
   it.each(["REJECTED", "BLOCKED"])(
     "keeps a %s invoice even without base amount, so R2 can catch a resubmission",
     (status) => {

@@ -3,6 +3,7 @@ import {
   CurrencyCodeSchema,
   ExchangeRateSchema,
   isExchangeRateOne,
+  isSupportedCurrency,
   MinorAmountSchema,
   SupportedCurrencySchema,
 } from "@/contracts/money";
@@ -34,6 +35,16 @@ describe("SupportedCurrencySchema", () => {
 
   it.each(["JPY", "EUR", "CLP"])("rejects %s, which is not configured with 2 decimals", (code) => {
     expect(SupportedCurrencySchema.safeParse(code).success).toBe(false);
+  });
+});
+
+describe("isSupportedCurrency", () => {
+  it.each([
+    ["COP", true],
+    ["EUR", false],
+    ["usd", false],
+  ])("is %s → %s", (code, expected) => {
+    expect(isSupportedCurrency(code)).toBe(expected);
   });
 });
 

@@ -101,6 +101,10 @@ describe("ApprovalSchema", () => {
     },
   );
 
+  it("rejects paying an approval in a currency outside the supported list", () => {
+    expect(ApprovalSchema.safeParse(buildApproval({ currency: "EUR" })).success).toBe(false);
+  });
+
   it("accepts blocking an approval whose currency was unknown, without money data", () => {
     const revalidationResults: RuleResult[] = [
       PASSED_REVALIDATION[0],

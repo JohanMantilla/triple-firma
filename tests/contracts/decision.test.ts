@@ -81,6 +81,10 @@ describe("DecisionSchema", () => {
     },
   );
 
+  it("rejects PAY in a currency outside the supported list", () => {
+    expect(DecisionSchema.safeParse(buildDecision({ currency: "EUR" })).success).toBe(false);
+  });
+
   it("accepts ESCALATE without base amount when the currency is unknown", () => {
     const decision = buildDecision({
       outcome: "ESCALATE",
