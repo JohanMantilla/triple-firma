@@ -31,7 +31,11 @@ export function evaluateSuspiciousContentRule(ctx: RuleContext): RuleResult {
   const sourceMatch = sourceText === null ? null : findInstruction(sourceText);
   const fieldMatch = findInstructionInFields(extraction);
   const lineItemAmounts = extraction.lineItemAmountsMinor ?? [];
-  const summedItemsMinor = lineItemAmounts.length === 0 ? null : sumMinor(lineItemAmounts);
+  const readAmounts = lineItemAmounts.filter((amount): amount is number => amount !== null);
+  const unreadableLineCount = lineItemAmounts.length - readAmounts.length;
+  // A partial sum would only add a confusing mismatch: an unreadable line already escalates.
+  const summedItemsMinor =
+    unreadableLineCount > 0 || readAmounts.length === 0 ? null : sumMinor(readAmounts);
   const itemsTotalMinor = summedItemsMinor ?? lineItemsSumMinor;
   const isSubtotalMismatch =
     summedItemsMinor !== null &&
@@ -50,6 +54,7 @@ export function evaluateSuspiciousContentRule(ctx: RuleContext): RuleResult {
     amountMinor: ctx.amountMinor,
     lineItemsSumMinor,
     lineItemCount: lineItemAmounts.length,
+    unreadableLineCount,
     summedItemsMinor,
     taxMinor,
     hasSourceText: sourceText !== null,
@@ -65,6 +70,7 @@ export function evaluateSuspiciousContentRule(ctx: RuleContext): RuleResult {
         MESSAGES.fieldLabels[fieldMatch.field],
         fieldMatch.match,
       ),
+    unreadableLineCount > 0 && MESSAGES.suspiciousContent.unreadableLineItems(unreadableLineCount),
     isSubtotalMismatch &&
       MESSAGES.suspiciousContent.subtotalMismatch(
         money(lineItemsSumMinor ?? 0),

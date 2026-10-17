@@ -80,6 +80,7 @@ describe("ExtractionSchema", () => {
   it.each([
     ["the amount of each line item", [80_000_000, 20_000_000]],
     ["no line item amounts", null],
+    ["a line whose amount could not be read, kept in its place", [80_000_000, null]],
   ])("accepts %s", (_label, lineItemAmountsMinor) => {
     expect(ExtractionSchema.safeParse({ ...buildExtraction(), lineItemAmountsMinor }).success).toBe(
       true,

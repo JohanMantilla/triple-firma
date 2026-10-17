@@ -41,6 +41,7 @@ describe("evaluateSuspiciousContentRule (R10)", () => {
           amountMinor: 250_000,
           lineItemsSumMinor: 250_000,
           lineItemCount: 0,
+          unreadableLineCount: 0,
           summedItemsMinor: null,
           taxMinor: null,
           hasSourceText: false,
@@ -219,6 +220,31 @@ describe("evaluateSuspiciousContentRule (R10)", () => {
     ])("escalates line amounts %s the total", (_case, lineItemAmountsMinor) => {
       const invoice = invoiceWith({ lineItemsSumMinor: null, lineItemAmountsMinor });
       expect(evaluate(invoice).outcome).toBe("ESCALATE");
+    });
+
+    it("escalates when one line amount could not be read, instead of losing the breakdown", () => {
+      const invoice = invoiceWith({
+        lineItemsSumMinor: null,
+        lineItemAmountsMinor: [160_000, null],
+      });
+      expect(evaluate(invoice)).toMatchObject({
+        outcome: "ESCALATE",
+        message:
+          "R10: no se pudo leer el monto de 1 ítem, así que el total no se puede verificar. Requiere revisión humana.",
+        compared: { lineItemCount: 2, unreadableLineCount: 1, summedItemsMinor: null },
+      });
+    });
+
+    it("escalates when no line amount could be read, and still compares a printed subtotal", () => {
+      const invoice = invoiceWith({
+        lineItemsSumMinor: 200_000,
+        lineItemAmountsMinor: [null, null],
+      });
+      const { message } = evaluate(invoice);
+      expect(message).toContain("no se pudo leer el monto de 2 ítems");
+      expect(message).toContain(
+        "el total (USD 2.500,00) no cuadra con la suma de ítems (USD 2.000,00).",
+      );
     });
 
     it("falls back to the printed subtotal when there are no line amounts", () => {

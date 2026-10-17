@@ -16,12 +16,12 @@ export function extractedFieldSchema<T extends z.ZodType>(value: T) {
 
 // A zero or negative amount is not a valid value: the reader leaves it null and uncertain, so R1 escalates.
 // issueDate is when the invoice was issued: R4 checks the agreement was in force on that date.
-// lineItemsSumMinor is the sum of the line items before tax and taxMinor the tax printed on the invoice,
-// copied and never computed; R10 checks that together they equal the amount. taxMinor may be absent
-// while the reader does not extract it yet: absent or null means no tax was read.
+// lineItemsSumMinor is the subtotal of the line items as printed and taxMinor the tax printed on the
+// invoice, both copied and never computed. taxMinor may be absent while the reader does not extract it
+// yet: absent or null means no tax was read.
 // lineItemAmountsMinor is the amount of each line item exactly as printed, copied and never summed by
-// the reader: R10 adds them up in code, so the check does not depend on the reader computing a sum.
-// Absent or null means no line amounts were read.
+// the reader: R10 adds them up in code. A line whose amount cannot be read stays as null in its place,
+// so one unreadable line never hides the breakdown; R10 escalates it. Absent or null: no lines read.
 export const ExtractionSchema = z.object({
   payee: extractedFieldSchema(PayeeNameSchema),
   amountMinor: extractedFieldSchema(PositiveMinorAmountSchema),
@@ -31,7 +31,7 @@ export const ExtractionSchema = z.object({
   reference: extractedFieldSchema(ReferenceSchema),
   lineItemsSumMinor: MinorAmountSchema.nullable(),
   taxMinor: MinorAmountSchema.nullable().optional(),
-  lineItemAmountsMinor: z.array(MinorAmountSchema).max(500).nullable().optional(),
+  lineItemAmountsMinor: z.array(MinorAmountSchema.nullable()).max(500).nullable().optional(),
   suspiciousText: z.array(z.string()),
 });
 export type Extraction = z.infer<typeof ExtractionSchema>;
