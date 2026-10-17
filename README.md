@@ -4,7 +4,7 @@
 
 Agente que revisa las facturas de una empresa y decide si **pagarlas**, **frenarlas** o **escalarlas** a una persona, dentro de las reglas que la empresa define. Cada decisión queda registrada y explicada. Proyecto para el reto Blinka.
 
-> **Estado:** esqueleto del proyecto. Los módulos se están construyendo. La propuesta completa está en [docs/PROPUESTA.md](docs/PROPUESTA.md).
+> La propuesta completa está en [docs/PROPUESTA.md](docs/PROPUESTA.md).
 
 ## Cómo funciona
 
@@ -105,6 +105,47 @@ npm test
 | `npm test`          | Pruebas con Vitest                                      |
 | `npm run format`    | Formatea el código con Prettier                         |
 | `npm run build`     | Build de producción                                     |
+| `npm run demo`      | Carga el set de facturas y abre la app (ver "Demo")     |
+
+## Demo
+
+| Comando               | Qué hace                                                                                                                                                               |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run demo`        | Reinicia **tu** base de Turso, carga las reglas de Andes Labs y decide `dev/` y `adversarial/` desde la caché, sin API key ni tokens. Luego abre http://localhost:3000 |
+| `npm run demo:live`   | Igual, pero si una factura no está en caché la lee con el modelo (requiere `ANTHROPIC_API_KEY`) y guarda la lectura en `data/cache/`                                   |
+| `npm run demo:tamper` | Altera una entrada del registro directamente en la base, como podría hacerlo alguien con acceso a ella. El botón **Verificar integridad** la detecta                   |
+
+Todas las facturas del set se deciden con el mismo reloj fijo (`DATASET_NOW`), así que el resultado no depende del día en que se corra.
+
+Un archivo cuya extracción falló queda en ESCALATE para esos mismos bytes (es idempotente por hash): para reintentar hay que cambiar el archivo.
+
+## API
+
+| Método | Ruta                          | Para qué                                                      |
+| ------ | ----------------------------- | ------------------------------------------------------------- |
+| `POST` | `/api/invoices`               | Subir una factura (campo `file`: PDF, imagen, `.eml`, `.txt`) |
+| `GET`  | `/api/invoices/[id]/file`     | Ver el documento original                                     |
+| `GET`  | `/api/decisions?status=…`     | Listar decisiones (`PENDING_APPROVAL` = bandeja)              |
+| `GET`  | `/api/decisions/[id]`         | Detalle: datos extraídos, reglas, explicación y aprobación    |
+| `GET`  | `/api/config` · `PUT`         | Leer o guardar las reglas (cada cambio es una versión nueva)  |
+| `POST` | `/api/approvals/[decisionId]` | Aprobar o rechazar con `{ action, approver, comment }`        |
+| `GET`  | `/api/audit/verify`           | Verificar la cadena de hashes del registro                    |
+| `GET`  | `/api/metrics`                | Métricas contra `data/expected.csv`                           |
+
+## Deploy (Vercel + Turso)
+
+La base del deploy es `triple-firma-demo` y **solo E la reinicia**. La base compartida nunca va en `.env.local`: usa un archivo aparte, `.env.demo` (ya ignorado por git).
+
+1. Crea la base de la demo: `turso db create triple-firma-demo`, y copia su URL y un token.
+2. Importa el repo en Vercel y agrega `TURSO_DATABASE_URL` y `TURSO_AUTH_TOKEN`. **No** agregues `ANTHROPIC_API_KEY`: la URL pública funciona desde la caché, y una factura nueva se escala por seguridad.
+3. Carga la base desde tu máquina con esas variables en `.env.demo`: `npx tsx --env-file=.env.demo scripts/demo.ts`.
+4. Abre la URL, aprueba una escalada, recarga y comprueba que sigue aprobada.
+
+> **Advertencia:** el paso 3 **reinicia la base a la que apunta** `.env.demo`. Además, `PUT /api/config` y las aprobaciones no tienen autenticación: no compartas el deploy público más allá del jurado hasta protegerlas.
+
+## Plan B sin internet
+
+Con `TURSO_DATABASE_URL=file:local.db` en `.env.local`, `npm run demo` funciona igual con un archivo local, sin red.
 
 ## Estructura
 
