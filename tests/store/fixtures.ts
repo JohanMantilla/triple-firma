@@ -5,7 +5,7 @@ import path from "node:path";
 import type { Client } from "@libsql/client";
 import type { Decision } from "@/contracts/decision";
 import type { Invoice } from "@/contracts/invoice";
-import { openDb, withWriteTransaction } from "@/store/db";
+import { type Executor, openDb, withWriteTransaction } from "@/store/db";
 import { insertDecision } from "@/store/decision-repository";
 import { insertInvoice } from "@/store/invoice-repository";
 import { buildInvoice } from "../engine/fixtures";
@@ -42,4 +42,9 @@ export async function storeDecision(
     });
     await insertDecision(tx, decision, period);
   });
+}
+
+export async function countAuditEntries(db: Executor): Promise<number> {
+  const { rows } = await db.execute("SELECT count(*) AS n FROM audit_entries");
+  return Number(rows[0]?.n);
 }
