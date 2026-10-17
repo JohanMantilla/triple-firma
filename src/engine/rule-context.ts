@@ -75,6 +75,19 @@ export function toPeriod(isoUtc: string, timezone: string): Period {
   return PeriodSchema.parse(`${year}-${month}`);
 }
 
+// The calendar date of a UTC timestamp in the given time zone, as "YYYY-MM-DD":
+// "2026-10-31T02:00:00Z" is still "2026-10-30" in America/New_York.
+export function toLocalDate(isoUtc: string, timezone: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(isoUtc));
+  const part = (type: string) => parts.find((item) => item.type === type)?.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
 function deepFreeze<T>(value: T): T {
   if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
     Object.freeze(value);

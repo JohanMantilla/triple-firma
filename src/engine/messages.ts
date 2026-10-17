@@ -51,4 +51,16 @@ export const MESSAGES = {
     converted: (currency: string, rate: string, baseAmount: string) =>
       `R8: ${currency} convertido con la tasa fija ${rate} por USD: ${baseAmount}.`,
   },
+
+  dueDate: {
+    unreadable: "R9: no se pudo leer con certeza la fecha de vencimiento; se escala por seguridad.",
+    tooOverdue: (dueDate: string, daysOverdue: number, maxDaysOverdue: number) =>
+      `R9: venció el ${dueDate}, hace ${daysOverdue} días; la política admite hasta ${maxDaysOverdue}.`,
+    tooFarAhead: (dueDate: string, daysAhead: number, maxDaysAhead: number) =>
+      `R9: vence el ${dueDate}, dentro de ${daysAhead} días; la política admite hasta ${maxDaysAhead}.`,
+    withinPolicy: (dueDate: string, daysUntilDue: number) =>
+      daysUntilDue < 0
+        ? `R9: venció el ${dueDate}, hace ${-daysUntilDue} días, dentro de la política.`
+        : `R9: vence el ${dueDate}, dentro de ${daysUntilDue} días, dentro de la política.`,
+  },
 };
