@@ -3,13 +3,22 @@ import { type HistoryEntry, isCountedInBudget } from "@/contracts/history";
 import { normalizePayee } from "@/contracts/payee";
 import { normalizeReference } from "@/contracts/reference";
 import { formatMoney } from "../format-money";
-import { MESSAGES } from "../messages";
+import { MESSAGES, quoteUntrusted } from "../messages";
 import { type RuleContext, toLocalDate } from "../rule-context";
 import { isOneSwapApart, isWithinOneEdit } from "./edit-distance";
 
-type Match = {
-  entry: HistoryEntry;
-  kind: "EXACT" | "NEAR" | "UNREADABLE_REFERENCE" | "UNREADABLE_AMOUNT";
+type MatchKind = "EXACT" | "NEAR" | "UNREADABLE_AMOUNT" | "UNREADABLE_REFERENCE";
+type Match = { entry: HistoryEntry; kind: MatchKind };
+
+// The invoice's own reference, normalized once for the whole history.
+type CurrentReference = { normalized: string | null; isCertain: boolean };
+
+// From the strongest match to the weakest: the explanation reports the strongest one.
+const STRENGTH: Record<MatchKind, number> = {
+  EXACT: 0,
+  NEAR: 1,
+  UNREADABLE_AMOUNT: 2,
+  UNREADABLE_REFERENCE: 3,
 };
 
 // R2: the invoice is compared with every past invoice of any period except itself. The same file, or
@@ -56,51 +65,55 @@ export function evaluateDuplicateRule(ctx: RuleContext): RuleResult {
   }
   const uncertain = labelsOf((field) => field.isUncertain);
 
-  const invoiceReference = reference.value;
-  const isReferenceCertain = !reference.isUncertain;
+  const current: CurrentReference = {
+    normalized: reference.value === null ? null : normalizeReference(reference.value),
+    isCertain: !reference.isUncertain,
+  };
   const invoicePayee = normalizePayee(payee.value);
   const matches = others
-    .map((entry) => {
+    .map((entry): Match | null => {
       const isSamePayee = entry.payee !== null && normalizePayee(entry.payee) === invoicePayee;
       // A past invoice whose amount or currency could not be read (kept so a resubmitted copy is
       // caught) is compared on payee and reference only; it can never be proven identical.
       if (entry.amountMinor === null || entry.currency === null) {
-        const byReference = isSamePayee
-          ? classify(entry, invoiceReference, isReferenceCertain)
-          : null;
+        const byReference = isSamePayee ? classify(entry, current) : null;
         const isReferenceMatch =
           byReference !== null && byReference.kind !== "UNREADABLE_REFERENCE";
-        return isReferenceMatch ? { entry, kind: "UNREADABLE_AMOUNT" as const } : null;
+        return isReferenceMatch ? { entry, kind: "UNREADABLE_AMOUNT" } : null;
       }
       const isSameMoney =
         entry.amountMinor === amountMinor.value && entry.currency === currency.value;
-      return (isSamePayee || entry.payee === null) && isSameMoney
-        ? classify(entry, invoiceReference, isReferenceCertain)
-        : null;
+      if (!isSameMoney || (!isSamePayee && entry.payee !== null)) return null;
+      const match = classify(entry, current);
+      // An anonymous past invoice (no payee) with an unknown reference would match every invoice of
+      // that amount, from any payee: it is too weak to compare and is skipped.
+      return entry.payee === null && match?.kind === "UNREADABLE_REFERENCE" ? null : match;
     })
     .filter((match): match is Match => match !== null);
 
+  const reportPayee = quoteUntrusted(payee.value);
+  const reportAmount = formatMoney(amountMinor.value, currency.value);
   const blocking = matches.find(
-    ({ entry, kind }) =>
-      kind === "EXACT" && entry.payee !== null && isCountedInBudget(entry.status),
+    ({ entry, kind }) => kind === "EXACT" && isCountedInBudget(entry.status),
   );
   if (blocking !== undefined) {
     const { entry } = blocking;
+    const date = toLocalDate(entry.decidedAt, config.timezone);
     return result(
       "BLOCK",
-      MESSAGES.duplicate.exact(
-        entry.reference ?? "",
-        entry.payee ?? "",
-        formatMoney(entry.amountMinor ?? 0, entry.currency ?? ""),
-        toLocalDate(entry.decidedAt, config.timezone),
-      ),
+      MESSAGES.duplicate.exact(entry.reference, reportPayee, reportAmount, date),
       "EXACT",
       entry,
     );
   }
 
-  // A match with a rejected or blocked invoice explains best why a person must look again.
-  const review = matches.find(({ entry }) => !isCountedInBudget(entry.status)) ?? matches[0];
+  // The strongest match is reported; between equally strong ones, a rejected or blocked invoice
+  // explains best why a person must look again.
+  const review = [...matches].sort(
+    (a, b) =>
+      STRENGTH[a.kind] - STRENGTH[b.kind] ||
+      Number(isCountedInBudget(a.entry.status)) - Number(isCountedInBudget(b.entry.status)),
+  )[0];
   if (review !== undefined) {
     const { entry, kind } = review;
     const date = toLocalDate(entry.decidedAt, config.timezone);
@@ -116,7 +129,7 @@ export function evaluateDuplicateRule(ctx: RuleContext): RuleResult {
     if (kind === "UNREADABLE_AMOUNT") {
       return result(
         "ESCALATE",
-        MESSAGES.duplicate.unreadableAmount(entry.reference ?? "", date),
+        MESSAGES.duplicate.unreadableAmount(entry.reference, date),
         "UNREADABLE_AMOUNT",
         entry,
       );
@@ -124,17 +137,14 @@ export function evaluateDuplicateRule(ctx: RuleContext): RuleResult {
     if (kind === "UNREADABLE_REFERENCE") {
       return result(
         "ESCALATE",
-        MESSAGES.duplicate.unreadableReference(
-          payee.value,
-          formatMoney(amountMinor.value, currency.value),
-        ),
+        MESSAGES.duplicate.unreadableReference(reportPayee, reportAmount),
         "UNREADABLE_REFERENCE",
         entry,
       );
     }
     return result(
       "ESCALATE",
-      MESSAGES.duplicate.near(entry.reference ?? "", invoiceReference ?? ""),
+      MESSAGES.duplicate.near(entry.reference, reference.value),
       "NEAR",
       entry,
     );
@@ -150,31 +160,26 @@ export function evaluateDuplicateRule(ctx: RuleContext): RuleResult {
 // A missing payee or reference on either side cannot rule a duplicate out, so it needs review. An
 // uncertain reference still blocks an exact copy, but any other reference of the same payee and
 // amount needs review, since the reading itself may be wrong.
-function classify(
-  entry: HistoryEntry,
-  invoiceReference: string | null,
-  isReferenceCertain: boolean,
-): Match | null {
-  if (entry.reference === null || invoiceReference === null) {
+function classify(entry: HistoryEntry, current: CurrentReference): Match | null {
+  if (entry.reference === null || current.normalized === null) {
     return { entry, kind: "UNREADABLE_REFERENCE" };
   }
   const past = normalizeReference(entry.reference);
-  const current = normalizeReference(invoiceReference);
-  if (past === current) return { entry, kind: entry.payee === null ? "NEAR" : "EXACT" };
-  // Digits other than 0-9 (Arabic-Indic, Devanagari...) are not folded by NFKC, so such a reference
-  // cannot be compared reliably: it needs review, like an unreadable one.
-  const hasForeignDigits = (text: string) => /[^0-9]/u.test(text.replace(/[^\p{Nd}]/gu, ""));
-  if (!isReferenceCertain || hasForeignDigits(past) || hasForeignDigits(current)) {
+  if (past === current.normalized) return { entry, kind: entry.payee === null ? "NEAR" : "EXACT" };
+  if (!current.isCertain || hasForeignDigits(past) || hasForeignDigits(current.normalized)) {
     return { entry, kind: "UNREADABLE_REFERENCE" };
   }
   const isNear =
-    isWithinOneEdit(past, current) ||
-    isOneSwapApart(past, current) ||
-    withoutZeros(past) === withoutZeros(current);
-  if (isNear) {
-    return { entry, kind: "NEAR" };
-  }
-  return null;
+    isWithinOneEdit(past, current.normalized) ||
+    isOneSwapApart(past, current.normalized) ||
+    withoutZeros(past) === withoutZeros(current.normalized);
+  return isNear ? { entry, kind: "NEAR" } : null;
+}
+
+// Digits other than 0-9 (Arabic-Indic, Devanagari...) are not folded by NFKC, so such a reference
+// cannot be compared reliably: it needs review, like an unreadable one.
+function hasForeignDigits(normalizedReference: string): boolean {
+  return /[^0-9]/.test(normalizedReference.replace(/[^\p{Nd}]/gu, ""));
 }
 
 // Compares normalized references ignoring every zero, so padding never hides a copy, however it is

@@ -133,6 +133,38 @@ describe("evaluateDuplicateRule (R2)", () => {
     });
   });
 
+  it("ignores an anonymous past invoice with no payee and no reference", () => {
+    const anonymous = past({ payee: null, reference: null });
+    expect(evaluate([anonymous]).outcome).toBe("PASS");
+  });
+
+  it("reports a near copy of a paid invoice before a weaker match with a rejected one", () => {
+    const history = [
+      past({
+        invoiceId: "inv-rejected",
+        reference: null,
+        status: "REJECTED",
+        exchangeRate: null,
+        baseAmountMinor: null,
+      }),
+      past({ invoiceId: "inv-paid", reference: "INV-103" }),
+    ];
+    expect(evaluate(history).compared).toMatchObject({
+      matchType: "NEAR",
+      matchedInvoiceId: "inv-paid",
+    });
+  });
+
+  it("says una factura when the past invoice's reference could not be read", () => {
+    const pending = past({
+      reference: null,
+      status: "PENDING_APPROVAL",
+    });
+    expect(evaluate([pending]).message).toBe(
+      "R2: posible duplicado de una factura de \u201cDev Partners SAS\u201d por USD 2.500,00; una de las referencias no se pudo leer; requiere revisión humana.",
+    );
+  });
+
   it("still passes an unrelated reference of the same payee and amount", () => {
     expect(evaluate([past({ reference: "INV-555" })]).outcome).toBe("PASS");
   });
