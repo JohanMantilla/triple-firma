@@ -75,6 +75,25 @@ export const MESSAGES = {
     unknown: (payee: string) =>
       `R3: beneficiario nuevo: ${quoteUntrusted(payee)} no está en la lista de beneficiarios permitidos.`,
   },
+
+  agreement: {
+    unreadable: (label: string) =>
+      `R4: no se puede comparar con lo acordado porque no se pudo leer con certeza: ${label}.`,
+    none: (payee: string) =>
+      `R4: no hay un acuerdo registrado con ${quoteUntrusted(payee)}; requiere revisión humana.`,
+    issueDateUnreadable:
+      "R4: no se pudo leer con certeza la fecha de emisión para verificar la vigencia del acuerdo.",
+    outOfForce: (issueDate: string, payee: string, validFrom: string, validUntil: string | null) =>
+      `R4: la factura se emitió el ${issueDate}, fuera de la vigencia del acuerdo con “${payee}” (${validFrom} a ${validUntil ?? "sin fecha de fin"}).`,
+    currencyMismatch: (currency: string, payee: string, agreedCurrency: string) =>
+      `R4: cobra en ${currency}; lo acordado con “${payee}” es en ${agreedCurrency}.`,
+    overAgreed: (charged: string, payee: string, agreed: string, tolerance: string) =>
+      `R4: cobra ${charged}, más de lo acordado con “${payee}” (${agreed}, tolerancia ${tolerance}).`,
+    underAgreed: (charged: string, payee: string, agreed: string, tolerance: string) =>
+      `R4: cobra ${charged}, menos de lo acordado con “${payee}” (${agreed}, tolerancia ${tolerance}); requiere revisión humana.`,
+    matches: (charged: string, payee: string, agreed: string, tolerance: string) =>
+      `R4: cobra ${charged}, conforme a lo acordado con “${payee}” (${agreed}, tolerancia ${tolerance}).`,
+  },
 };
 
 // "USD, COP, MXN y ARS"
