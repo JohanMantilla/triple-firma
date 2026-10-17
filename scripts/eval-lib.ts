@@ -106,8 +106,7 @@ export function loadExpected(csvText: string): ExpectedRow[] {
   const header = rows[0].map((h) => h.trim().toLowerCase());
   const idx = (name: string) => {
     const i = header.indexOf(name);
-    if (i < 0)
-      throw new Error(`expected.csv: falta la columna "${name}" (columnas: ${header.join(", ")})`);
+    if (i < 0) throw new Error(`expected.csv: falta la columna "${name}" (columnas: ${header.join(", ")})`);
     return i;
   };
   const iFile = idx("archivo");
@@ -120,21 +119,14 @@ export function loadExpected(csvText: string): ExpectedRow[] {
     const file = (r[iFile] ?? "").trim();
     const decision = normalizeDecision(r[iDec]);
     if (!file) throw new Error(`expected.csv fila ${n + 2}: archivo vacío`);
-    if (!decision)
-      throw new Error(`expected.csv fila ${n + 2} (${file}): decisión inválida "${r[iDec]}"`);
+    if (!decision) throw new Error(`expected.csv fila ${n + 2} (${file}): decisión inválida "${r[iDec]}"`);
     if (seen.has(file)) throw new Error(`expected.csv: archivo repetido ${file}`);
     seen.add(file);
     const rules = (r[iRules] ?? "")
       .split(/[|;\s]+/)
       .map((x) => x.trim().toUpperCase())
       .filter(Boolean);
-    out.push({
-      file,
-      partition: partitionOf(file),
-      decision,
-      rules,
-      justification: iJust >= 0 ? (r[iJust] ?? "").trim() : "",
-    });
+    out.push({ file, partition: partitionOf(file), decision, rules, justification: iJust >= 0 ? (r[iJust] ?? "").trim() : "" });
   });
   return out;
 }
@@ -145,9 +137,7 @@ export function loadExpected(csvText: string): ExpectedRow[] {
 const PASS_WORDS = new Set(["PASS", "PASA", "OK"]);
 
 function outcomeLevel(outcome: string): "PASS" | "ESCALATE" | "BLOCK" | "UNKNOWN" {
-  const s = String(outcome ?? "")
-    .trim()
-    .toUpperCase();
+  const s = String(outcome ?? "").trim().toUpperCase();
   if (PASS_WORDS.has(s)) return "PASS";
   if (s === "ESCALATE" || s === "ESCALAR") return "ESCALATE";
   if (s === "BLOCK" || s === "FRENAR") return "BLOCK";
@@ -157,9 +147,7 @@ function outcomeLevel(outcome: string): "PASS" | "ESCALATE" | "BLOCK" | "UNKNOWN
 /** Reglas que NO pasaron, en mayúsculas ("R5"). */
 export function firedRules(results: RuleResultIn[] | undefined): string[] {
   if (!results) return [];
-  return results
-    .filter((r) => outcomeLevel(r.outcome) !== "PASS")
-    .map((r) => String(r.rule).trim().toUpperCase());
+  return results.filter((r) => outcomeLevel(r.outcome) !== "PASS").map((r) => String(r.rule).trim().toUpperCase());
 }
 
 /**
@@ -176,20 +164,14 @@ export function isExplained(rec: DecisionRecord | undefined, decision: Decision 
   if (text.length < 15) return false;
   let deciding: RuleResultIn[];
   if (decision === "PAGAR") deciding = results;
-  else if (decision === "FRENAR")
-    deciding = results.filter((r) => outcomeLevel(r.outcome) === "BLOCK");
+  else if (decision === "FRENAR") deciding = results.filter((r) => outcomeLevel(r.outcome) === "BLOCK");
   else {
     deciding = results.filter((r) => outcomeLevel(r.outcome) === "ESCALATE");
-    if (deciding.length === 0)
-      deciding = results.filter((r) => outcomeLevel(r.outcome) === "BLOCK");
+    if (deciding.length === 0) deciding = results.filter((r) => outcomeLevel(r.outcome) === "BLOCK");
   }
   if (deciding.length === 0) return false;
   return deciding.every(
-    (r) =>
-      (r.message ?? "").trim().length >= 10 &&
-      r.compared &&
-      typeof r.compared === "object" &&
-      Object.keys(r.compared).length > 0,
+    (r) => (r.message ?? "").trim().length >= 10 && r.compared && typeof r.compared === "object" && Object.keys(r.compared).length > 0,
   );
 }
 
@@ -259,8 +241,7 @@ export function evaluate(expected: ExpectedRow[], records: DecisionRecord[]): Ev
     const actual = rec ? normalizeDecision(rec.decision) : null;
     const missing = actual === null;
     const fired = rec && rec.results ? firedRules(rec.results) : null;
-    const rulesOk =
-      e.rules.length === 0 || fired === null ? null : e.rules.every((x) => fired.includes(x));
+    const rulesOk = e.rules.length === 0 || fired === null ? null : e.rules.every((x) => fired.includes(x));
     return {
       file: e.file,
       partition: e.partition,
@@ -275,13 +256,7 @@ export function evaluate(expected: ExpectedRow[], records: DecisionRecord[]): Ev
       firedRules: fired,
       rulesOk,
       explained: isExplained(rec, actual),
-      explanation: rec
-        ? (rec.explanation ??
-          (rec.results ?? [])
-            .filter((r) => outcomeLevel(r.outcome) !== "PASS")
-            .map((r) => r.message ?? "")
-            .join(" "))
-        : "",
+      explanation: rec ? (rec.explanation ?? (rec.results ?? []).filter((r) => outcomeLevel(r.outcome) !== "PASS").map((r) => r.message ?? "").join(" ")) : "",
       justification: e.justification,
       error: rec?.error,
       ms: rec?.ms,
@@ -336,27 +311,14 @@ export function frac(r: Ratio): string {
 export function renderConsoleSummary(title: string, m: Metrics): string {
   const L: string[] = [];
   L.push(`\n=== ${title} (${m.total} facturas) ===`);
-  L.push(
-    m.leaks === 0
-      ? `  Fugas            : 0   ✅`
-      : `  Fugas            : ${m.leaks}  🚨 DESCALIFICANTE → ${m.leakFiles.join(", ")}`,
-  );
+  L.push(m.leaks === 0 ? `  Fugas            : 0   ✅` : `  Fugas            : ${m.leaks}  🚨 DESCALIFICANTE → ${m.leakFiles.join(", ")}`);
   L.push(`  Exactitud        : ${frac(m.accuracy)}  (${pct(m.accuracy)})`);
-  L.push(
-    `  Autonomía        : ${frac(m.autonomy)}  (${pct(m.autonomy)})   [esperado PAGAR/FRENAR decidido bien]`,
-  );
-  L.push(
-    `  Sobreescalación  : ${frac(m.overEscalation)}  (${pct(m.overEscalation)})   [ESCALAR cuando se esperaba PAGAR/FRENAR]`,
-  );
-  L.push(
-    `  FRENAR vs ESCALAR: ${m.blockedInsteadOfEscalated}   [se frenó algo que debía ir a un humano]`,
-  );
+  L.push(`  Autonomía        : ${frac(m.autonomy)}  (${pct(m.autonomy)})   [esperado PAGAR/FRENAR decidido bien]`);
+  L.push(`  Sobreescalación  : ${frac(m.overEscalation)}  (${pct(m.overEscalation)})   [ESCALAR cuando se esperaba PAGAR/FRENAR]`);
+  L.push(`  FRENAR vs ESCALAR: ${m.blockedInsteadOfEscalated}   [se frenó algo que debía ir a un humano]`);
   L.push(`  Explicabilidad   : ${frac(m.explainability)}  (${pct(m.explainability)})`);
-  L.push(
-    `  Reglas correctas : ${frac(m.rulesMatch)}  (${pct(m.rulesMatch)})   [informativo: ¿se disparó la regla esperada?]`,
-  );
-  if (m.missing)
-    L.push(`  Sin decisión     : ${m.missing}   ⚠ el pipeline no devolvió resultado válido`);
+  L.push(`  Reglas correctas : ${frac(m.rulesMatch)}  (${pct(m.rulesMatch)})   [informativo: ¿se disparó la regla esperada?]`);
+  if (m.missing) L.push(`  Sin decisión     : ${m.missing}   ⚠ el pipeline no devolvió resultado válido`);
   if (m.avgMs !== null) L.push(`  Latencia media   : ${m.avgMs} ms/factura`);
   if (m.totalTokens !== null) L.push(`  Tokens totales   : ${m.totalTokens}`);
   return L.join("\n");
@@ -365,14 +327,10 @@ export function renderConsoleSummary(title: string, m: Metrics): string {
 export function renderRowsTable(rows: RowEval[]): string {
   const icon = (r: RowEval) => (r.leak ? "🚨" : r.correct ? "✅" : r.missing ? "⛔" : "❌");
   const pad = (s: string, n: number) => (s.length >= n ? s : s + " ".repeat(n - s.length));
-  const L = [
-    `  ${pad("", 3)}${pad("archivo", 26)}${pad("esperado", 10)}${pad("obtenido", 10)}reglas esperadas → disparadas`,
-  ];
+  const L = [`  ${pad("", 3)}${pad("archivo", 26)}${pad("esperado", 10)}${pad("obtenido", 10)}reglas esperadas → disparadas`];
   for (const r of rows) {
     const fired = r.firedRules === null ? "(sin results)" : r.firedRules.join("|") || "—";
-    L.push(
-      `  ${pad(icon(r), 3)}${pad(r.file, 26)}${pad(r.expected, 10)}${pad(r.actual ?? "—", 10)}${r.expectedRules.join("|") || "—"} → ${fired}`,
-    );
+    L.push(`  ${pad(icon(r), 3)}${pad(r.file, 26)}${pad(r.expected, 10)}${pad(r.actual ?? "—", 10)}${r.expectedRules.join("|") || "—"} → ${fired}`);
   }
   return L.join("\n");
 }
@@ -399,9 +357,7 @@ export function renderMarkdown(args: {
   L.push("");
   L.push("## Métricas");
   L.push("");
-  L.push(
-    "| Partición | Facturas | Fugas | Exactitud | Autonomía | Sobreescalación | Explicabilidad |",
-  );
+  L.push("| Partición | Facturas | Fugas | Exactitud | Autonomía | Sobreescalación | Explicabilidad |");
   L.push("|---|---|---|---|---|---|---|");
   const line = (name: string, x: Metrics) =>
     `| ${name} | ${x.total} | ${x.leaks} | ${frac(x.accuracy)} (${pct(x.accuracy)}) | ${frac(x.autonomy)} (${pct(x.autonomy)}) | ${frac(x.overEscalation)} (${pct(x.overEscalation)}) | ${frac(x.explainability)} (${pct(x.explainability)}) |`;
@@ -417,9 +373,7 @@ export function renderMarkdown(args: {
     L.push(`| ${e} | ${x.PAGAR} | ${x.FRENAR} | ${x.ESCALAR} | ${x.SIN_DECISION} |`);
   }
   L.push("");
-  L.push(
-    "> Error crítico: la celda esperado FRENAR/ESCALAR × obtenido PAGAR. Frenar o escalar de más es un error blando.",
-  );
+  L.push("> Error crítico: la celda esperado FRENAR/ESCALAR × obtenido PAGAR. Frenar o escalar de más es un error blando.");
   L.push("");
   const bad = result.rows.filter((r) => !r.correct);
   L.push(`## Diferencias (${bad.length})`);
@@ -428,10 +382,7 @@ export function renderMarkdown(args: {
   else {
     L.push("| | Archivo | Esperado | Obtenido | Por qué se esperaba eso |");
     L.push("|---|---|---|---|---|");
-    for (const r of bad)
-      L.push(
-        `| ${r.leak ? "🚨" : "❌"} | ${r.file} | ${r.expected} | ${r.actual ?? "sin decisión"} | ${r.justification.replace(/\|/g, "/")} |`,
-      );
+    for (const r of bad) L.push(`| ${r.leak ? "🚨" : "❌"} | ${r.file} | ${r.expected} | ${r.actual ?? "sin decisión"} | ${r.justification.replace(/\|/g, "/")} |`);
   }
   L.push("");
   L.push("## Detalle por factura");
@@ -440,15 +391,11 @@ export function renderMarkdown(args: {
   L.push("|---|---|---|---|---|---|---|");
   for (const r of result.rows) {
     const icon = r.leak ? "🚨" : r.correct ? "✅" : "❌";
-    L.push(
-      `| ${icon} | ${r.file} | ${r.expected} | ${r.actual ?? "—"} | ${r.expectedRules.join(", ") || "—"} | ${r.firedRules === null ? "n/d" : r.firedRules.join(", ") || "—"} | ${r.explained ? "sí" : "no"} |`,
-    );
+    L.push(`| ${icon} | ${r.file} | ${r.expected} | ${r.actual ?? "—"} | ${r.expectedRules.join(", ") || "—"} | ${r.firedRules === null ? "n/d" : r.firedRules.join(", ") || "—"} | ${r.explained ? "sí" : "no"} |`);
   }
   if (result.extras.length) {
     L.push("");
-    L.push(
-      `> Archivos con decisión que no están en expected.csv (ignorados): ${result.extras.join(", ")}`,
-    );
+    L.push(`> Archivos con decisión que no están en expected.csv (ignorados): ${result.extras.join(", ")}`);
   }
   L.push("");
   return L.join("\n");

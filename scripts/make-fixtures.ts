@@ -8,8 +8,8 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { loadExpected } from "./eval-lib.ts";
-import type { DecisionRecord } from "./eval-lib.ts";
+import { loadExpected } from "./eval-lib";
+import type { DecisionRecord } from "./eval-lib";
 
 const dataDir = resolve(process.argv[2] ?? "data");
 const outDir = resolve("scripts/fixtures");
@@ -59,10 +59,7 @@ get("dev/dev-10.pdf").decision = "BLOCK"; //  error blando: se frenó algo que d
 get("dev/dev-01.pdf").decision = "ESCALATE"; //  sobreescalación
 get("dev/dev-02.eml").results = []; //  correcto pero sin explicación
 get("dev/dev-02.eml").explanation = "";
-leaky.splice(
-  leaky.findIndex((x) => x.file === "dev/dev-05.txt"),
-  1,
-); //  sin decisión
+leaky.splice(leaky.findIndex((x) => x.file === "dev/dev-05.txt"), 1); //  sin decisión
 
 writeFileSync(join(outDir, "decisions-perfect.json"), JSON.stringify(perfect, null, 2) + "\n");
 writeFileSync(join(outDir, "decisions-leaky.json"), JSON.stringify(leaky, null, 2) + "\n");
