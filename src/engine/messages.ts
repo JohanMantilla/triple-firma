@@ -183,6 +183,8 @@ export const MESSAGES = {
       `el texto original contiene una instrucción dirigida al sistema, que se ignoró: ${quoteUntrusted(match)}.`,
     instructionInField: (label: string, match: string) =>
       `lo leído en ${label} contiene una instrucción dirigida al sistema, que se ignoró: ${quoteUntrusted(match)}.`,
+    subtotalMismatch: (printedSubtotal: string, summedItems: string) =>
+      `el subtotal impreso (${printedSubtotal}) no cuadra con la suma de los montos de los ítems (${summedItems}).`,
     totalMismatch: (amount: string, lineItemsSum: string, tax: string | null) =>
       tax === null
         ? `el total (${amount}) no cuadra con la suma de ítems (${lineItemsSum}).`
