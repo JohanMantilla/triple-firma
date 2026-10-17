@@ -1,3 +1,4 @@
+import type { Period } from "@/contracts/dates";
 import type { RuleId } from "@/contracts/decision";
 
 // Every sentence a person reads in the audit log lives here, in Spanish, built from the values compared.
@@ -96,7 +97,53 @@ export const MESSAGES = {
     matches: (charged: string, payee: string, agreed: string, tolerance: string) =>
       `R4: cobra ${charged}, conforme a lo acordado con “${payee}” (${agreed}, tolerancia ${tolerance}).`,
   },
+
+  budget: {
+    missingBaseAmount: (baseCurrency: string) =>
+      `R6: no se pudo calcular el monto en ${baseCurrency} para compararlo con el presupuesto; se escala por seguridad.`,
+    overBudget: (period: string, committed: string, budget: string, amount: string) =>
+      `R6: presupuesto de ${period}: ${committed} comprometidos de ${budget}; este pago (${amount}) lo excede.`,
+    overWithReserved: (
+      period: string,
+      committed: string,
+      reserved: string,
+      amount: string,
+      total: string,
+      budget: string,
+    ) =>
+      `R6: presupuesto de ${period}: ${committed} comprometidos + ${reserved} reservados por escaladas pendientes + este pago (${amount}) = ${total}, excede ${budget}; requiere revisión humana.`,
+    withinBudget: (
+      period: string,
+      committed: string,
+      reserved: string | null,
+      amount: string,
+      total: string,
+      budget: string,
+    ) =>
+      `R6: presupuesto de ${period}: ${committed} comprometidos${reserved === null ? "" : ` + ${reserved} reservados`} + este pago (${amount}) = ${total} de ${budget}.`,
+  },
 };
+
+const MONTH_NAMES = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+];
+
+// "2026-10" → "octubre de 2026"
+export function formatPeriod(period: Period): string {
+  const [year, month] = period.split("-");
+  return `${MONTH_NAMES[Number(month) - 1]} de ${year}`;
+}
 
 // "USD, COP, MXN y ARS"
 function listInSpanish(items: readonly string[]): string {
