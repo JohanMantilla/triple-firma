@@ -6,8 +6,6 @@ export const MESSAGES = {
   allRulesPassed: "Pagada: todas las reglas pasaron.",
   escalatedPrefix: "Escalada:",
   blockedPrefix: "Frenada:",
-  ruleNotImplemented: (ruleId: RuleId) =>
-    `${ruleId}: la regla aún no está implementada; se escala por seguridad.`,
   ruleFailed: (ruleId: RuleId) => `${ruleId}: la regla no pudo evaluarse; se escala por seguridad.`,
 
   fieldLabels: {
@@ -143,6 +141,31 @@ export const MESSAGES = {
       `R6: presupuesto de ${period}: ${committed} comprometidos${reserved === null ? "" : ` + ${reserved} reservados`} + este pago (${amount}) = ${total} de ${budget}.`,
   },
 
+  splitPayment: {
+    unreadablePayee:
+      "R7: no se pudo leer con certeza el beneficiario para buscar pagos fraccionados; se escala por seguridad.",
+    missingBaseAmount: (baseCurrency: string) =>
+      `R7: no se pudo calcular el monto en ${baseCurrency} para sumarlo con los pagos al mismo beneficiario; se escala por seguridad.`,
+    noEarlierPayments: (payee: string, windowDays: number) =>
+      `R7: no hay otros pagos a ${quoteUntrusted(payee)} ${withinWindow(windowDays)}.`,
+    overThreshold: (
+      payee: string,
+      total: string,
+      windowDays: number,
+      invoiceCount: number,
+      threshold: string,
+    ) =>
+      `R7: ${quoteUntrusted(payee)} suma ${total} ${withinWindow(windowDays)} (${invoiceCount} facturas, incluida esta); supera el umbral de aprobación de ${threshold}; requiere revisión humana.`,
+    withinThreshold: (
+      payee: string,
+      total: string,
+      windowDays: number,
+      invoiceCount: number,
+      threshold: string,
+    ) =>
+      `R7: ${quoteUntrusted(payee)} suma ${total} ${withinWindow(windowDays)} (${invoiceCount} facturas, incluida esta), dentro del umbral de aprobación de ${threshold}.`,
+  },
+
   suspiciousContent: {
     // A passing result says exactly what was checked: the total is never said to match when it was
     // not compared.
@@ -190,6 +213,11 @@ const MONTH_NAMES = [
 export function formatPeriod(period: Period): string {
   const [year, month] = period.split("-");
   return `${MONTH_NAMES[Number(month) - 1]} de ${year}`;
+}
+
+// "en los últimos 7 días", or "hoy" for a one-day window.
+function withinWindow(windowDays: number): string {
+  return windowDays === 1 ? "hoy" : `en los últimos ${windowDays} días`;
 }
 
 // "USD, COP, MXN y ARS"

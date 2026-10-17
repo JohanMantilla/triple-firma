@@ -13,14 +13,39 @@ const input = {
 };
 
 describe("evaluateRules", () => {
-  it("escalates while some rules are still placeholders, so nothing is ever paid by default", () => {
-    const decision = evaluateRules(input);
-    const placeholders = decision.ruleResults.filter((result) =>
-      result.message.includes("aún no está implementada"),
-    );
+  // The fixture invoice charges exactly the agreed USD 2,500.00; a threshold of USD 3,000.00 lets it
+  // pass R5, so every real rule passes.
+  const cleanInput = { ...input, config: buildRulesConfig({ approvalThresholdMinor: 300_000 }) };
+
+  it("pays a clean invoice only when all ten real rules pass", () => {
+    const decision = evaluateRules(cleanInput);
+    expect(decision.ruleResults.filter((result) => result.outcome !== "PASS")).toEqual([]);
+    expect(decision).toMatchObject({
+      outcome: "PAY",
+      explanation: "Pagada: todas las reglas pasaron.",
+      amountMinor: 250_000,
+      currency: "USD",
+      exchangeRate: "1",
+      baseAmountMinor: 250_000,
+    });
+  });
+
+  it("escalates the same invoice when it completes a split payment", () => {
+    const part = buildHistoryEntry({
+      reference: "INV-090",
+      amountMinor: 100_000,
+      baseAmountMinor: 100_000,
+      decidedAt: "2026-10-15T14:00:00Z",
+    });
+    const decision = evaluateRules({ ...cleanInput, history: [part] });
     expect(decision.outcome).toBe("ESCALATE");
-    expect(placeholders.length).toBeGreaterThan(0);
-    expect(placeholders.every((result) => result.outcome === "ESCALATE")).toBe(true);
+    expect(decision.ruleResults.filter((result) => result.outcome !== "PASS")).toMatchObject([
+      { ruleId: "R7", compared: { totalMinor: 350_000 } },
+    ]);
+  });
+
+  it("escalates the fixture invoice over the default threshold, never paying it", () => {
+    expect(evaluateRules(input).outcome).toBe("ESCALATE");
   });
 });
 
