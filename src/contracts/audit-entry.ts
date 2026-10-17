@@ -20,3 +20,23 @@ export const AuditEntrySchema = z
     path: ["prevHash"],
   });
 export type AuditEntry = z.infer<typeof AuditEntrySchema>;
+
+// Result of walking the chain. firstInvalidSeq is the position of the first entry whose position, link
+// or hash does not match. lastHash is the hash stored in the last entry, shown in the UI as an external
+// anchor; it is a plain string because a tampered row may hold anything.
+export const AuditVerificationSchema = z
+  .object({
+    isValid: z.boolean(),
+    entryCount: z.int().nonnegative(),
+    firstInvalidSeq: z.int().positive().nullable(),
+    lastHash: z.string().nullable(),
+  })
+  .refine((result) => result.isValid === (result.firstInvalidSeq === null), {
+    message: "A chain is valid exactly when no entry is invalid",
+    path: ["firstInvalidSeq"],
+  })
+  .refine((result) => (result.entryCount === 0) === (result.lastHash === null), {
+    message: "lastHash is null exactly when the log is empty",
+    path: ["lastHash"],
+  });
+export type AuditVerification = z.infer<typeof AuditVerificationSchema>;
