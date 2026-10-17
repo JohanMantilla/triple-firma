@@ -85,9 +85,12 @@ export function evaluateDuplicateRule(ctx: RuleContext): RuleResult {
         entry.amountMinor === amountMinor.value && entry.currency === currency.value;
       if (!isSameMoney || (!isSamePayee && entry.payee !== null)) return null;
       const match = classify(entry, current);
-      // An anonymous past invoice (no payee) with an unknown reference would match every invoice of
-      // that amount, from any payee: it is too weak to compare and is skipped.
-      return entry.payee === null && match?.kind === "UNREADABLE_REFERENCE" ? null : match;
+      // An anonymous past invoice (no payee) with a missing reference on either side would match
+      // every invoice of that amount, from any payee: it is too weak to compare and is skipped. Only
+      // a missing reference skips it; a reference that is present but unclear (foreign digits, an
+      // uncertain reading) still needs review.
+      const isReferenceMissing = entry.reference === null || current.normalized === null;
+      return entry.payee === null && isReferenceMissing ? null : match;
     })
     .filter((match): match is Match => match !== null);
 

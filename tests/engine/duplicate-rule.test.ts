@@ -133,6 +133,20 @@ describe("evaluateDuplicateRule (R2)", () => {
     });
   });
 
+  it("escalates foreign digits against an anonymous past invoice instead of passing", () => {
+    const anonymous = past({ payee: null, reference: "INV-102" });
+    const arabicIndic = (invoice: Invoice) => {
+      invoice.extraction.reference = {
+        ...invoice.extraction.reference,
+        value: "INV-\u0661\u0660\u0662",
+      };
+    };
+    expect(evaluate([anonymous], arabicIndic)).toMatchObject({
+      outcome: "ESCALATE",
+      compared: { matchType: "UNREADABLE_REFERENCE" },
+    });
+  });
+
   it("ignores an anonymous past invoice with no payee and no reference", () => {
     const anonymous = past({ payee: null, reference: null });
     expect(evaluate([anonymous]).outcome).toBe("PASS");
