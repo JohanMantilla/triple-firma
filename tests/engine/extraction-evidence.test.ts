@@ -121,6 +121,9 @@ describe("isDateSupported", () => {
     ["2026-05-05", "Due 05/05/2026"],
     ["2026-09-15", "Vence el 15 de setiembre de 2026"],
     ["2026-12-01", "Due Dec. 1, 2026"],
+    ["2026-01-15", "Fecha: 15/01/2026 Vence: 10/03/2026"],
+    ["2026-03-10", "Fecha: 15/01/2026 Vence: 10/03/2026"],
+    ["2026-10-30", "Emitida 30/10/2026 a las 10:00"],
   ])("supports %s with %j", (isoDate, evidence) => {
     expect(isDateSupported(isoDate, evidence)).toBe(true);
   });
@@ -132,6 +135,9 @@ describe("isDateSupported", () => {
     ["2026-05-05", "Due 5 2026"],
     ["2026-10-30", "Factura del mes"],
     ["2026-09-30", "Vence 30 2026, pago separado"],
+    ["2026-03-15", "Fecha: 15/01/2026 Vence: 10/03/2026"],
+    ["2026-01-10", "Fecha: 15/01/2026 Vence: 10/03/2026"],
+    ["2026-10-30", "30 items, Oct 2026"],
     ["2026-03-30", "Vence 30 2026, marca registrada"],
   ])("does not support %s with %j", (isoDate, evidence) => {
     expect(isDateSupported(isoDate, evidence)).toBe(false);

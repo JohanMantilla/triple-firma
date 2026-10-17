@@ -98,32 +98,40 @@ const MONTH_NAMES: readonly (readonly string[])[] = [
   ["dec", "december", "dic", "diciembre"],
 ];
 
-// The year (4 digits), day and month of an ISO date (due date or issue date) must all appear in the
-// evidence; the month may be a number or an English or Spanish name ("Oct 30, 2026", "30/10/2026",
-// "30 de octubre de 2026").
+// The ISO date (due date or issue date) must be written as ONE date in the evidence, in a real date
+// format, so pieces of two dates ("15/01/2026 ... 10/03/2026") never combine into a third one:
+// - numbers joined by "/", "-" or ".", with a 4-digit year first or last: "30/10/2026", "2026-10-30";
+// - day, then month name: "30 de octubre de 2026", "30 oct 2026";
+// - month name, then day: "Oct 30, 2026", "Dec. 1, 2026".
+// Whether "05/10/2026" means May or October is the extraction's call (it marks an ambiguous date as
+// uncertain); here both readings are accepted.
 export function isDateSupported(isoDate: string, evidence: string): boolean {
-  const [year, month, day] = isoDate.split("-");
+  const [year, month, day] = isoDate.split("-").map(Number);
   const text = normalizeForSearch(evidence);
-  const numbers = text.match(/\d+/g) ?? [];
-  const isDayOrMonth = (target: string) => (number: string) =>
-    number.length <= 2 && Number(number) === Number(target);
+  const isTarget = (y: string, m: number, d: string) =>
+    Number(y) === year && m === month && Number(d) === day;
 
-  if (!removeFirst(numbers, (number) => number === year)) return false;
-  if (!removeFirst(numbers, isDayOrMonth(day))) return false;
-  return removeFirst(numbers, isDayOrMonth(month)) || hasMonthName(text, Number(month));
+  for (const [, first, second, third] of text.matchAll(NUMERIC_DATE)) {
+    if (first.length === 4 && isTarget(first, Number(second), third)) return true;
+    if (third.length === 4 && isTarget(third, Number(second), first)) return true;
+    if (third.length === 4 && isTarget(third, Number(first), second)) return true;
+  }
+  for (const [, dayPart, monthName, yearPart] of text.matchAll(DAY_MONTH_NAME_DATE)) {
+    if (isTarget(yearPart, monthOf(monthName), dayPart)) return true;
+  }
+  for (const [, monthName, dayPart, yearPart] of text.matchAll(MONTH_NAME_DAY_DATE)) {
+    if (isTarget(yearPart, monthOf(monthName), dayPart)) return true;
+  }
+  return false;
 }
 
-// Removes the first item that matches, so the same number cannot count as both day and month.
-function removeFirst(items: string[], matches: (item: string) => boolean): boolean {
-  const index = items.findIndex(matches);
-  if (index === -1) return false;
-  items.splice(index, 1);
-  return true;
-}
+const NUMERIC_DATE = /(?<!\d)(\d{1,4})[/.-](\d{1,2})[/.-](\d{1,4})(?!\d)/g;
+const DAY_MONTH_NAME_DATE = /(?<!\d)(\d{1,2}) (?:de )?(\p{L}+)\.?,? (?:de |del )?(\d{4})(?!\d)/gu;
+const MONTH_NAME_DAY_DATE = /(\p{L}+)\.? (\d{1,2}),? (\d{4})(?!\d)/gu;
 
-function hasMonthName(text: string, month: number): boolean {
-  const words = text.split(/[^\p{L}]+/u);
-  return MONTH_NAMES[month - 1].some((name) => words.includes(name));
+// 1-12 for an English or Spanish month name or abbreviation, 0 for any other word.
+function monthOf(word: string): number {
+  return MONTH_NAMES.findIndex((names) => names.includes(word)) + 1;
 }
 
 function toMinorUnits(number: string): bigint {

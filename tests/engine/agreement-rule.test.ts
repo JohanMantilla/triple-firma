@@ -181,6 +181,13 @@ describe("evaluateAgreementRule (R4)", () => {
     expect(evaluate(email).outcome).toBe("PASS");
   });
 
+  it("escalates an issue date built from pieces of two different dates in its evidence", () => {
+    // Issued 2026-01-15, before the agreement; the 03 comes from the due date, not the issue date.
+    const agreements = [{ ...AGREEMENT, validFrom: "2026-03-01" }];
+    const mixed = issuedOn("2026-03-15", "Fecha: 15/01/2026 Vence: 10/03/2026");
+    expect(evaluate(mixed, { agreements }).outcome).toBe("ESCALATE");
+  });
+
   it("escalates an unreadable issue date", () => {
     const unreadable = (invoice: Invoice) => {
       invoice.extraction.issueDate = { raw: null, value: null, evidence: null, isUncertain: true };
