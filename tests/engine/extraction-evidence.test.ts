@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   isAmountSupported,
   isCurrencySupported,
-  isDueDateSupported,
+  isDateSupported,
+  isEvidenceInSource,
   isPayeeSupported,
   isReferenceSupported,
 } from "@/engine/rules/extraction-evidence";
@@ -110,7 +111,7 @@ describe("isCurrencySupported", () => {
   });
 });
 
-describe("isDueDateSupported", () => {
+describe("isDateSupported", () => {
   it.each([
     ["2026-10-30", "Due: Oct 30, 2026"],
     ["2026-10-30", "Vence: 30/10/2026"],
@@ -120,8 +121,11 @@ describe("isDueDateSupported", () => {
     ["2026-05-05", "Due 05/05/2026"],
     ["2026-09-15", "Vence el 15 de setiembre de 2026"],
     ["2026-12-01", "Due Dec. 1, 2026"],
+    ["2026-01-15", "Fecha: 15/01/2026 Vence: 10/03/2026"],
+    ["2026-03-10", "Fecha: 15/01/2026 Vence: 10/03/2026"],
+    ["2026-10-30", "Emitida 30/10/2026 a las 10:00"],
   ])("supports %s with %j", (isoDate, evidence) => {
-    expect(isDueDateSupported(isoDate, evidence)).toBe(true);
+    expect(isDateSupported(isoDate, evidence)).toBe(true);
   });
 
   it.each([
@@ -131,8 +135,25 @@ describe("isDueDateSupported", () => {
     ["2026-05-05", "Due 5 2026"],
     ["2026-10-30", "Factura del mes"],
     ["2026-09-30", "Vence 30 2026, pago separado"],
+    ["2026-03-15", "Fecha: 15/01/2026 Vence: 10/03/2026"],
+    ["2026-01-10", "Fecha: 15/01/2026 Vence: 10/03/2026"],
+    ["2026-10-30", "30 items, Oct 2026"],
     ["2026-03-30", "Vence 30 2026, marca registrada"],
   ])("does not support %s with %j", (isoDate, evidence) => {
-    expect(isDueDateSupported(isoDate, evidence)).toBe(false);
+    expect(isDateSupported(isoDate, evidence)).toBe(false);
+  });
+});
+
+describe("isEvidenceInSource", () => {
+  it("finds evidence in the original text, ignoring case and spacing", () => {
+    expect(isEvidenceInSource("Date: Oct 1, 2026", "Hola.\nDATE:   oct 1,  2026")).toBe(true);
+  });
+
+  it("does not find evidence that the original text does not contain", () => {
+    expect(isEvidenceInSource("Date: Oct 1, 2026", "Fecha: 15/01/2026")).toBe(false);
+  });
+
+  it.each([null, "", "   "])("passes when there is no original text (%j)", (sourceText) => {
+    expect(isEvidenceInSource("Date: Oct 1, 2026", sourceText)).toBe(true);
   });
 });

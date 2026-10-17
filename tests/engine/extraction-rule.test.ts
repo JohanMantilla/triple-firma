@@ -137,6 +137,17 @@ describe("evaluateExtractionRule (R1)", () => {
     });
   });
 
+  it("escalates a due date built from pieces of two dates in its evidence", () => {
+    const invoice = withField("dueDate", {
+      value: "2026-03-15",
+      evidence: "Fecha: 15/01/2026 Vence: 10/03/2026",
+    });
+    expect(evaluate(invoice)).toMatchObject({
+      outcome: "ESCALATE",
+      compared: { valueNotSupported: "dueDate" },
+    });
+  });
+
   it("escalates a due date that its evidence does not show, so it cannot dodge R9", () => {
     const invoice = withField("dueDate", { raw: "Oct 30, 2026", value: "2026-01-01" });
     expect(evaluate(invoice)).toMatchObject({

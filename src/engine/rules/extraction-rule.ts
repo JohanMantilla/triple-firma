@@ -5,10 +5,10 @@ import type { RuleContext } from "../rule-context";
 import {
   isAmountSupported,
   isCurrencySupported,
-  isDueDateSupported,
+  isDateSupported,
+  isEvidenceInSource,
   isPayeeSupported,
   isReferenceSupported,
-  normalizeForSearch,
 } from "./extraction-evidence";
 
 const REQUIRED_FIELDS = ["payee", "amountMinor", "currency", "dueDate", "reference"] as const;
@@ -19,9 +19,6 @@ type RequiredField = (typeof REQUIRED_FIELDS)[number];
 // also appear in it. All checks are deterministic: the reader's output is never trusted as is.
 export function evaluateExtractionRule(ctx: RuleContext): RuleResult {
   const { extraction, sourceText } = ctx.invoice;
-  // A blank original text gives nothing to search, so it is treated like a PDF without text.
-  const searchableSource =
-    sourceText === null || sourceText.trim() === "" ? null : normalizeForSearch(sourceText);
   const details: Record<string, string | null> = {};
 
   const unreadable: RequiredField[] = [];
@@ -39,10 +36,7 @@ export function evaluateExtractionRule(ctx: RuleContext): RuleResult {
     } else if (!isValueSupported(extraction, field, evidence)) {
       valueNotSupported.push(field);
       details[`${field}Evidence`] = evidence;
-    } else if (
-      searchableSource !== null &&
-      !searchableSource.includes(normalizeForSearch(evidence))
-    ) {
+    } else if (!isEvidenceInSource(evidence, sourceText)) {
       evidenceNotInSource.push(field);
       details[`${field}Evidence`] = evidence;
     }
@@ -96,7 +90,7 @@ function isValueSupported(extraction: Extraction, field: RequiredField, evidence
       );
     case "dueDate":
       return (
-        extraction.dueDate.value !== null && isDueDateSupported(extraction.dueDate.value, evidence)
+        extraction.dueDate.value !== null && isDateSupported(extraction.dueDate.value, evidence)
       );
   }
 }

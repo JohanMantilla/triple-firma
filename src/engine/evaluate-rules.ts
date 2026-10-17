@@ -10,6 +10,7 @@ import {
 import { explainDecision } from "./explain-decision";
 import { MESSAGES } from "./messages";
 import { buildRuleContext, type RuleContext, type RuleContextInput } from "./rule-context";
+import { evaluateAgreementRule } from "./rules/agreement-rule";
 import { evaluateCurrencyRule } from "./rules/currency-rule";
 import { evaluateDueDateRule } from "./rules/due-date-rule";
 import { evaluateExtractionRule } from "./rules/extraction-rule";
@@ -24,7 +25,7 @@ const RULES: Record<RuleId, RuleEvaluator> = {
   R1: evaluateExtractionRule,
   R2: notImplemented("R2"),
   R3: evaluatePayeeRule,
-  R4: notImplemented("R4"),
+  R4: evaluateAgreementRule,
   R5: evaluatePaymentLimitRule,
   R6: notImplemented("R6"),
   R7: notImplemented("R7"),
