@@ -4,6 +4,8 @@ import { isNearPayee, loosePayee } from "@/engine/rules/payee-similarity";
 const CYRILLIC_A = String.fromCodePoint(0x0430);
 const CYRILLIC_O = String.fromCodePoint(0x043e);
 const GREEK_OMICRON = String.fromCodePoint(0x03bf);
+const DOTLESS_I = String.fromCodePoint(0x0131);
+const SCRIPT_G = String.fromCodePoint(0x0261);
 
 describe("loosePayee", () => {
   it.each([
@@ -12,6 +14,7 @@ describe("loosePayee", () => {
     ["Dev-Partners S.A.S.", "devpartnerssas"],
     [`${CYRILLIC_A}cme Corp`, "acmecorp"],
     [`Acme C${GREEK_OMICRON}rp`, "acmecorp"],
+    [`${SCRIPT_G}lobex ${DOTLESS_I}nc`, "globexinc"],
   ])("loosens %j to %j", (name, expected) => {
     expect(loosePayee(name)).toBe(expected);
   });
