@@ -218,6 +218,14 @@ describe("evaluateSuspiciousContentRule (R10)", () => {
       ).toMatchObject({ outcome: "ESCALATE", compared: { taxMinor: null } });
     });
 
+    it("explains a mismatch without a currency code when the currency could not be read", () => {
+      const invoice = invoiceWith({ lineItemsSumMinor: 1 });
+      invoice.extraction.currency = { ...invoice.extraction.currency, value: null };
+      expect(evaluate(invoice).message).toBe(
+        "R10: el total (2.500,00) no cuadra con la suma de ítems (0,01). Requiere revisión humana.",
+      );
+    });
+
     it("escalates a total below its line items", () => {
       expect(evaluate(invoiceWith({ lineItemsSumMinor: 300_000 })).outcome).toBe("ESCALATE");
     });
