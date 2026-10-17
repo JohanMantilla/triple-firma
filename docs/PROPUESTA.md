@@ -87,7 +87,7 @@ Configuración editable desde la pantalla. **Una regla sin configurar nunca pasa
 
 | Regla | Condición | Resultado | Ejemplo de explicación |
 |---|---|---|---|
-| **R1 Extracción completa** | Falta un campo obligatorio, hay un campo con `isUncertain`, el esquema es inválido o no hay evidencia | ESCALAR | "No se pudo leer con certeza el monto." |
+| **R1 Extracción completa** | Falta un campo obligatorio, hay un campo con `isUncertain` o sin evidencia; la evidencia **no respalda el valor** (el beneficiario y la referencia deben aparecer como palabras completas, el monto como un número positivo exacto que no sea parte de una fecha, porcentaje o código, la moneda como código ISO y el vencimiento con su año, mes y día); o, en correos y chats, la evidencia no aparece en el texto original | ESCALAR | "No se pudo leer con certeza el monto." / "La evidencia no respalda el valor leído de: Beneficiario." |
 | **R2 Duplicado** | Exacto: mismo beneficiario (`normalizePayee`), monto, moneda y referencia (`normalizeReference`, que ignora mayúsculas, espacios, guiones, barras y puntos) ya pagada o pendiente | FRENAR | "Ya se pagó la factura FAC-102 de Café Andino (COP 4.500.000) el 03/10." |
 | | Casi duplicado: mismo beneficiario, monto y moneda, y la referencia normalizada está **a un carácter de distancia** (cambiado, agregado o quitado: "FAC-102" vs "FAC-103" o "FAC-102A") o es **igual al quitar los ceros a la izquierda** de sus números ("FAC-102" vs "FAC-00102") | ESCALAR | "Posible duplicado de FAC-102, requiere revisión." |
 |                                | Coincide con una factura que antes fue **rechazada** por una persona o **frenada** (aunque sea otro archivo)       | ESCALAR | "Esta factura coincide con FAC-102, que fue rechazada el 03/10; requiere revisión." |
@@ -669,6 +669,7 @@ Depende de a qué se refiera el ingeniero:
 | Riesgo | Mitigación |
 |---|---|
 | El LLM lee mal un monto | Evidencia obligatoria, bandera `isUncertain`, verificador (P1), y R4 compara contra lo acordado |
+| **Límites de R1** (aceptados y documentados) | En PDF e imagen el valor y la evidencia los escribe el mismo LLM: R1 solo comprueba que coinciden entre sí, no con el documento. Una línea falsa escondida en un correo ("Total: USD 25.00") pasa R1 si el Lector la usa. R1 no entiende frases como "en nombre de", ni comprueba que monto y moneda salgan de la misma parte del documento, y una referencia muy corta puede coincidir con un número de página. Respaldo: R4 (lo acordado), R10 (contenido sospechoso y suma de ítems) y la revisión humana de lo escalado. Un "$" sin código de país escala. |
 | Se acaba la cuota del API durante la demo | Caché por hash; la demo corre offline |
 | Los 5 Claude Code generan código incoherente | Contratos congelados el viernes, glosario y patrones de nombres (6.5) en CLAUDE.md, una carpeta por dueño |
 | Integración tardía | Hito de punta a punta el sábado a la 1 pm |
