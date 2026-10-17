@@ -56,10 +56,34 @@ export function evaluateDuplicateRule(ctx: RuleContext): RuleResult {
 // or blocked invoices, unreadable fields, other pending escalations they are choosing among) passes,
 // because the approver already saw it. A BLOCKED or REJECTED entry of the same file passes too, so a
 // retry can never make the original escalation impossible to approve.
+//
+// An unreadable payee is the exception: R2 could not compare it when the invoice was escalated, so
+// the approver never saw the match. A payable invoice with the same reference, amount and currency
+// blocks it. An unreadable reference stays with the person: payee and amount alone match every fixed
+// monthly fee.
 export function checkDuplicateOnApproval(ctx: RuleContext): RuleResult {
   const payable = ctx.history.filter((entry) => entry.status === "PAYABLE");
   const comparison = compareWithHistory(ctx, payable);
   if (comparison.outcome === "BLOCK") return comparison;
+  const paidCopy = findPaidCopyWithoutPayee(ctx, payable);
+  if (paidCopy !== undefined) {
+    const { amountMinor, currency } = ctx.invoice.extraction;
+    return {
+      ruleId: "R2",
+      outcome: "BLOCK",
+      message: MESSAGES.duplicate.paidCopyWithoutPayee(
+        paidCopy.reference,
+        formatMoney(amountMinor.value ?? 0, currency.value ?? ""),
+        toLocalDate(paidCopy.decidedAt, ctx.config.timezone),
+      ),
+      compared: {
+        matchType: "EXACT_WITHOUT_PAYEE",
+        matchedInvoiceId: paidCopy.invoiceId,
+        matchedStatus: paidCopy.status,
+        matchedReference: paidCopy.reference,
+      },
+    };
+  }
   return {
     ruleId: "R2",
     outcome: "PASS",
@@ -71,6 +95,22 @@ export function checkDuplicateOnApproval(ctx: RuleContext): RuleResult {
       matchedReference: null,
     },
   };
+}
+
+function findPaidCopyWithoutPayee(
+  ctx: RuleContext,
+  payable: readonly HistoryEntry[],
+): HistoryEntry | undefined {
+  const { payee, amountMinor, currency, reference } = ctx.invoice.extraction;
+  if (payee.value !== null || reference.value === null) return undefined;
+  const invoiceReference = normalizeReference(reference.value);
+  return payable.find(
+    (entry) =>
+      entry.amountMinor === amountMinor.value &&
+      entry.currency === currency.value &&
+      entry.reference !== null &&
+      normalizeReference(entry.reference) === invoiceReference,
+  );
 }
 
 function compareWithHistory(ctx: RuleContext, others: readonly HistoryEntry[]): RuleResult {

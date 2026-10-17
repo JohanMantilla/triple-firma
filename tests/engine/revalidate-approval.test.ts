@@ -135,6 +135,24 @@ describe("revalidateApproval", () => {
       expect(approval.revalidationResults[0]).toMatchObject({ ruleId: "R2", outcome: "BLOCK" });
     });
 
+    it("blocks a copy already paid when the payee of the escalated invoice could not be read", () => {
+      const invoice = buildInvoice();
+      invoice.extraction.payee = { ...invoice.extraction.payee, value: null, isUncertain: true };
+      const paidCopy = buildHistoryEntry({
+        invoiceId: "inv-0",
+        reference: "INV-102",
+        amountMinor: 250_000,
+        baseAmountMinor: 250_000,
+      });
+      const approval = resolve({ invoice, history: [pendingEntry({ payee: null }), paidCopy] });
+      expect(approval.resultingOutcome).toBe("BLOCK");
+      expect(approval.revalidationResults[0]).toMatchObject({
+        ruleId: "R2",
+        outcome: "BLOCK",
+        compared: { matchType: "EXACT_WITHOUT_PAYEE", matchedInvoiceId: "inv-0" },
+      });
+    });
+
     it("does not let other pending escalations block it: the approver chooses among them", () => {
       const otherPending = buildHistoryEntry({
         invoiceId: "inv-p",

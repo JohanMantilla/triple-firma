@@ -549,6 +549,55 @@ describe("checkDuplicateOnApproval (R2 at approval)", () => {
     expect(approve([itself, past(overrides)]).outcome).toBe("PASS");
   });
 
+  describe("with an unreadable payee, never compared when it was escalated", () => {
+    function approveWithoutPayee(history: HistoryEntry[]) {
+      const invoice = buildInvoice();
+      invoice.extraction.payee = { ...invoice.extraction.payee, value: null, isUncertain: true };
+      return checkDuplicateOnApproval(
+        buildRuleContext({ invoice, config: buildRulesConfig(), history, now: NOW }),
+      );
+    }
+
+    it("blocks a payable invoice with the same reference, amount and currency", () => {
+      const paid = past({ invoiceId: "inv-0", reference: "inv 102" });
+      expect(approveWithoutPayee([itself, paid])).toEqual({
+        ruleId: "R2",
+        outcome: "BLOCK",
+        message:
+          "R2: el beneficiario de esta factura no se pudo leer y coincide en referencia, monto y moneda con la factura “inv 102” por USD 2.500,00, registrada como pagable el 2026-10-03; no se puede aprobar.",
+        compared: {
+          matchType: "EXACT_WITHOUT_PAYEE",
+          matchedInvoiceId: "inv-0",
+          matchedStatus: "PAYABLE",
+          matchedReference: "inv 102",
+        },
+      });
+    });
+
+    it.each([
+      ["another reference", { invoiceId: "inv-0", reference: "INV-555" }],
+      [
+        "another amount",
+        {
+          invoiceId: "inv-0",
+          reference: "INV-102",
+          amountMinor: 250_001,
+          baseAmountMinor: 250_001,
+        },
+      ],
+      [
+        "the same invoice still pending",
+        { invoiceId: "inv-0", reference: "INV-102", status: "PENDING_APPROVAL" as const },
+      ],
+      [
+        "a payable invoice whose reference could not be read",
+        { invoiceId: "inv-0", reference: null },
+      ],
+    ])("passes %s", (_case, overrides) => {
+      expect(approveWithoutPayee([itself, past(overrides)]).outcome).toBe("PASS");
+    });
+  });
+
   it("would still escalate or block the same matches in a normal decision", () => {
     const pendingCopy = past({
       invoiceId: "inv-0",
