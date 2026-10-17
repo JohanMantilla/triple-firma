@@ -66,6 +66,7 @@ describe("evaluateSplitPaymentRule (R7)", () => {
           approvalThresholdMinor: 200_000,
           baseAmountMinor: 100_000,
           earlierCount: 0,
+          pendingCount: 0,
           earlierInvoiceIds: "",
           earlierSumMinor: 0,
           totalMinor: 100_000,
@@ -212,6 +213,42 @@ describe("evaluateSplitPaymentRule (R7)", () => {
         outcome: "ESCALATE",
         compared: { earlierCount: 1, totalMinor: 200_001 },
       });
+    });
+
+    it.each([
+      [
+        "only a pending escalation",
+        [earlier(100_001, { status: "PENDING_APPROVAL", decidedAt: "2026-10-01T14:00:00Z" })],
+        "R7: “Dev Partners SAS” suma USD 2.000,01 con esta factura y 1 escalada pendiente de aprobación de cualquier fecha; supera el umbral de aprobación de USD 2.000,00; requiere revisión humana.",
+      ],
+      [
+        "payments and pending escalations",
+        [
+          earlier(50_000, { invoiceId: "inv-a" }),
+          earlier(30_000, { invoiceId: "inv-b", status: "PENDING_APPROVAL" }),
+          earlier(30_000, { invoiceId: "inv-c", status: "PENDING_APPROVAL" }),
+        ],
+        "R7: “Dev Partners SAS” suma USD 2.100,00 con esta factura, 1 pago en los últimos 7 días y 2 escaladas pendientes de aprobación de cualquier fecha; supera el umbral de aprobación de USD 2.000,00; requiere revisión humana.",
+      ],
+      [
+        "several payments, within the threshold",
+        [
+          earlier(40_000, { invoiceId: "inv-a" }),
+          earlier(40_000, { invoiceId: "inv-b" }),
+          earlier(10_000, { invoiceId: "inv-c", status: "PENDING_APPROVAL" }),
+        ],
+        "R7: “Dev Partners SAS” suma USD 1.900,00 con esta factura, 2 pagos en los últimos 7 días y 1 escalada pendiente de aprobación de cualquier fecha, dentro del umbral de aprobación de USD 2.000,00.",
+      ],
+    ])("names pending escalations instead of claiming a window: %s", (_case, history, message) => {
+      expect(evaluate({ history }).message).toBe(message);
+    });
+
+    it("counts pending escalations separately in the compared values", () => {
+      const history = [
+        earlier(50_000, { invoiceId: "inv-a" }),
+        earlier(30_000, { invoiceId: "inv-b", status: "PENDING_APPROVAL" }),
+      ];
+      expect(evaluate({ history }).compared).toMatchObject({ earlierCount: 2, pendingCount: 1 });
     });
 
     it("does not count a payable entry outside the window", () => {

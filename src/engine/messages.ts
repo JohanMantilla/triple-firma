@@ -150,22 +150,10 @@ export const MESSAGES = {
       `R7: no se pudo calcular el monto en ${baseCurrency} para sumarlo con los pagos al mismo beneficiario; se escala por seguridad.`,
     noEarlierPayments: (payee: string, windowDays: number) =>
       `R7: no hay otros pagos a ${quoteUntrusted(payee)} ${withinWindow(windowDays)}.`,
-    overThreshold: (
-      payee: string,
-      total: string,
-      windowDays: number,
-      invoiceCount: number,
-      threshold: string,
-    ) =>
-      `R7: ${quoteUntrusted(payee)} suma ${total} ${withinWindow(windowDays)} (${invoiceCount} facturas, incluida esta); supera el umbral de aprobación de ${threshold}; requiere revisión humana.`,
-    withinThreshold: (
-      payee: string,
-      total: string,
-      windowDays: number,
-      invoiceCount: number,
-      threshold: string,
-    ) =>
-      `R7: ${quoteUntrusted(payee)} suma ${total} ${withinWindow(windowDays)} (${invoiceCount} facturas, incluida esta), dentro del umbral de aprobación de ${threshold}.`,
+    overThreshold: (payee: string, total: string, parts: SummedParts, threshold: string) =>
+      `R7: ${quoteUntrusted(payee)} suma ${total} ${describeParts(parts)}; supera el umbral de aprobación de ${threshold}; requiere revisión humana.`,
+    withinThreshold: (payee: string, total: string, parts: SummedParts, threshold: string) =>
+      `R7: ${quoteUntrusted(payee)} suma ${total} ${describeParts(parts)}, dentro del umbral de aprobación de ${threshold}.`,
   },
 
   suspiciousContent: {
@@ -215,6 +203,25 @@ const MONTH_NAMES = [
 export function formatPeriod(period: Period): string {
   const [year, month] = period.split("-");
   return `${MONTH_NAMES[Number(month) - 1]} de ${year}`;
+}
+
+// The invoices R7 summed: earlier payments inside the window and pending escalations of any date.
+export type SummedParts = { windowDays: number; paymentCount: number; pendingCount: number };
+
+// "en los últimos 7 días (3 facturas, incluida esta)" when every earlier part is a payment inside the
+// window. A pending escalation counts whatever its date, so then the sentence names it instead of
+// claiming a window: "con esta factura, 1 pago en los últimos 7 días y 1 escalada pendiente de
+// aprobación de cualquier fecha".
+function describeParts({ windowDays, paymentCount, pendingCount }: SummedParts): string {
+  if (pendingCount === 0) {
+    return `${withinWindow(windowDays)} (${paymentCount + 1} facturas, incluida esta)`;
+  }
+  const payments =
+    paymentCount === 0
+      ? ""
+      : `, ${paymentCount} ${paymentCount === 1 ? "pago" : "pagos"} ${withinWindow(windowDays)}`;
+  const pending = `${pendingCount} ${pendingCount === 1 ? "escalada pendiente" : "escaladas pendientes"}`;
+  return `con esta factura${payments} y ${pending} de aprobación de cualquier fecha`;
 }
 
 // "en los últimos 7 días", or "hoy" for a one-day window.

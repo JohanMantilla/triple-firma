@@ -44,6 +44,7 @@ export function evaluateSplitPaymentRule(ctx: RuleContext): RuleResult {
   if (earlier.length === 0) {
     return result("PASS", MESSAGES.splitPayment.noEarlierPayments(payee, windowDays), {
       earlierCount: 0,
+      pendingCount: 0,
       earlierInvoiceIds: "",
       earlierSumMinor: 0,
       totalMinor: baseAmountMinor,
@@ -53,36 +54,27 @@ export function evaluateSplitPaymentRule(ctx: RuleContext): RuleResult {
   const earlierSumMinor = sumMinor(earlier.map((entry) => entry.baseAmountMinor));
   const totalMinor = sumMinor([earlierSumMinor, baseAmountMinor]);
   const money = (amountMinor: number) => formatMoney(amountMinor, baseCurrency);
+  const pendingCount = earlier.filter((entry) => entry.status === "PENDING_APPROVAL").length;
+  const parts = { windowDays, paymentCount: earlier.length - pendingCount, pendingCount };
   // The approver can see which invoices were summed.
   const details = {
     earlierCount: earlier.length,
+    pendingCount,
     earlierInvoiceIds: earlier.map((entry) => entry.invoiceId).join(","),
     earlierSumMinor,
     totalMinor,
   };
-  const invoiceCount = earlier.length + 1;
+  const threshold = money(approvalThresholdMinor);
   if (totalMinor > approvalThresholdMinor) {
     return result(
       "ESCALATE",
-      MESSAGES.splitPayment.overThreshold(
-        payee,
-        money(totalMinor),
-        windowDays,
-        invoiceCount,
-        money(approvalThresholdMinor),
-      ),
+      MESSAGES.splitPayment.overThreshold(payee, money(totalMinor), parts, threshold),
       details,
     );
   }
   return result(
     "PASS",
-    MESSAGES.splitPayment.withinThreshold(
-      payee,
-      money(totalMinor),
-      windowDays,
-      invoiceCount,
-      money(approvalThresholdMinor),
-    ),
+    MESSAGES.splitPayment.withinThreshold(payee, money(totalMinor), parts, threshold),
     details,
   );
 }
