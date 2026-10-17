@@ -11,6 +11,7 @@ import { explainDecision } from "./explain-decision";
 import { MESSAGES } from "./messages";
 import { buildRuleContext, type RuleContext, type RuleContextInput } from "./rule-context";
 import { evaluateExtractionRule } from "./rules/extraction-rule";
+import { evaluatePaymentLimitRule } from "./rules/payment-limit-rule";
 
 export type RuleEvaluator = (ctx: RuleContext) => RuleResult;
 
@@ -21,7 +22,7 @@ const RULES: Record<RuleId, RuleEvaluator> = {
   R2: notImplemented("R2"),
   R3: notImplemented("R3"),
   R4: notImplemented("R4"),
-  R5: notImplemented("R5"),
+  R5: evaluatePaymentLimitRule,
   R6: notImplemented("R6"),
   R7: notImplemented("R7"),
   R8: notImplemented("R8"),

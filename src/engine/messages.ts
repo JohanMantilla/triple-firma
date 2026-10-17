@@ -26,4 +26,15 @@ export const MESSAGES = {
       `la evidencia de ${labels} no aparece en el texto original.`,
     escalated: (reasons: readonly string[]) => `R1: ${reasons.join(" ")}`,
   },
+
+  paymentLimit: {
+    missingBaseAmount:
+      "R5: no se pudo calcular el monto en USD para compararlo con los límites; se escala por seguridad.",
+    overHardCap: (amount: string, hardCap: string) =>
+      `R5: ${amount} supera el tope absoluto de ${hardCap}; no se puede aprobar.`,
+    overThreshold: (amount: string, threshold: string) =>
+      `R5: ${amount} supera el umbral de aprobación de ${threshold}.`,
+    withinThreshold: (amount: string, threshold: string) =>
+      `R5: ${amount} no supera el umbral de aprobación de ${threshold}.`,
+  },
 };
