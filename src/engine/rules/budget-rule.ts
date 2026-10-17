@@ -5,16 +5,17 @@ import { formatPeriod, MESSAGES } from "../messages";
 import type { RuleContext } from "../rule-context";
 
 export type BudgetCheckOptions = {
-  // R6 reserves budget for pending escalations. Approval revalidation does not: the approver is
-  // choosing among them, so two pending escalations must not block each other (invariant 8).
-  isReservingPending: boolean;
+  // At approval (invariant 8) pending escalations reserve nothing: the approver is choosing among
+  // them, so two pending escalations never block each other. Nothing can be escalated at that point
+  // either, so an approval without a base amount is blocked: it could never be counted.
+  isApproval: boolean;
 };
 
 // R6: the payment must fit in the monthly budget of the current period. PAYABLE entries of the period
 // are committed; PENDING_APPROVAL entries with a known base amount are reserved. Over the committed budget the payment
 // is blocked; fitting only without the reservations, a person must choose. "Exceeds" is strictly greater.
 export function evaluateBudgetRule(ctx: RuleContext): RuleResult {
-  return checkBudget(ctx, { isReservingPending: true });
+  return checkBudget(ctx, { isApproval: false });
 }
 
 export function checkBudget(ctx: RuleContext, options: BudgetCheckOptions): RuleResult {
@@ -24,12 +25,19 @@ export function checkBudget(ctx: RuleContext, options: BudgetCheckOptions): Rule
   const compared = { period, baseAmountMinor, monthlyBudgetMinor, committedMinor, reservedMinor };
 
   if (baseAmountMinor === null) {
-    return {
-      ruleId: "R6",
-      outcome: "ESCALATE",
-      message: MESSAGES.budget.missingBaseAmount(baseCurrency),
-      compared,
-    };
+    return options.isApproval
+      ? {
+          ruleId: "R6",
+          outcome: "BLOCK",
+          message: MESSAGES.budget.missingBaseAmountOnApproval(baseCurrency),
+          compared,
+        }
+      : {
+          ruleId: "R6",
+          outcome: "ESCALATE",
+          message: MESSAGES.budget.missingBaseAmount(baseCurrency),
+          compared,
+        };
   }
 
   const money = (amountMinor: number) => formatMoney(amountMinor, baseCurrency);
@@ -97,7 +105,7 @@ function sumPeriodUsage(ctx: RuleContext, options: BudgetCheckOptions) {
       if (entry.period === ctx.period) {
         committedMinor = addMinor(committedMinor, entry.baseAmountMinor);
       }
-    } else if (options.isReservingPending) {
+    } else if (!options.isApproval) {
       reservedMinor = addMinor(reservedMinor, entry.baseAmountMinor);
     }
   }

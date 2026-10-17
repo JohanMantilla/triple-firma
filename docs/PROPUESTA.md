@@ -93,6 +93,8 @@ Configuración editable desde la pantalla. **Una regla sin configurar nunca pasa
 | | Casi duplicado: mismo beneficiario, monto y moneda, y la referencia normalizada está **a un carácter de distancia** (cambiado, agregado o quitado: "FAC-102" vs "FAC-103" o "FAC-102A") dos caracteres vecinos están intercambiados ("FAC-120"), o es **igual sin contar los ceros** ("FAC-102" vs "FAC-00102" o "INV-2026-007" vs "INV-2026-7"); una referencia con dígitos que no son 0–9 se trata como ilegible | ESCALAR | "Posible duplicado de FAC-102, requiere revisión." |
 |                                | Coincide con una factura que antes fue **rechazada** por una persona o **frenada** (aunque sea otro archivo)       | ESCALAR | "Esta factura coincide con FAC-102, que fue rechazada el 03/10; requiere revisión." |
 | | Si una factura del historial (o la nueva) tiene beneficiario o referencia ilegible, se compara con los campos que sí se leyeron (beneficiario, monto y moneda); si coinciden, es casi duplicado | ESCALAR | "Posible duplicado de una factura de Dev Partners SAS por USD 1.500 cuya referencia no se pudo leer; requiere revisión." |
+| | La propia factura decidida otra vez (un reintento o un reprocesamiento): si su entrada ya es `PAYABLE`, `REJECTED` o `BLOCKED`, se frena como mismo archivo, así nunca se paga dos veces. El mismo id con otro archivo se compara como cualquier otra factura (los ids los asigna el pipeline) | FRENAR | "R2: este mismo archivo ya se procesó como la factura inv-1." |
+| | Si su escalada sigue **pendiente** (mismo id, mismo archivo, `PENDING_APPROVAL`) y nada obliga a frenar, se escala: la decide la persona, no un reintento. No se frena para no dejar guardado un FRENAR que trabe la aprobación de la original. Solo la revalidación al aprobar omite esa entrada | ESCALAR | "R2: esta factura ya está pendiente de aprobación como inv-1; la decide una persona." |
 | **R3 Beneficiario** (se evalúa **en este orden**, y la primera condición que se cumple decide) | 1. Coincidencia exacta con un beneficiario **bloqueado** | FRENAR | "Old Vendor LLC está bloqueado por la empresa." |
 | | 2. Coincidencia aproximada con un beneficiario **bloqueado**, aunque también coincida exacto con uno permitido | ESCALAR | "El nombre se parece a 'Old Vendor LLC', que está bloqueado; requiere revisión." |
 | | 3. Coincidencia exacta con un beneficiario permitido | pasa | |
@@ -104,11 +106,16 @@ Configuración editable desde la pantalla. **Una regla sin configurar nunca pasa
 | | Monto en USD > tope absoluto (opcional; en la empresa ficticia, USD 10.000) | FRENAR | "USD 15.000 supera el tope absoluto de USD 10.000." |
 | **R6 Presupuesto del periodo** | Pagado + aprobado + este pago > presupuesto mensual | FRENAR | "Presupuesto de octubre: USD 18.400 usados de 20.000; este pago (USD 2.100) lo excede." |
 | | Solo se excede al sumar lo comprometido por escaladas pendientes | ESCALAR | "El presupuesto de octubre tiene USD 2.500 comprometidos por escaladas pendientes; este pago lo excedería." |
-| **R7 Fraccionamiento** | Suma en USD al mismo beneficiario en `splitPaymentWindowDays` días > `approvalThresholdMinor`, aunque cada pago esté por debajo | ESCALAR | "Dev Partners SAS suma USD 2.600 en 7 días; supera el umbral de aprobación de USD 2.000." |
+| **R7 Fraccionamiento** | Hay al menos un pago anterior al mismo beneficiario (mismo nombre con `normalizePayee`, o parecido como en R3: una factura con nombre parecido que una persona aprobó también suma) en la ventana, y la suma en USD de esos pagos más este es **estrictamente mayor** que `approvalThresholdMinor`, aunque cada pago esté por debajo | ESCALAR | "R7: “Dev Partners SAS” suma USD 2.600,00 en los últimos 7 días (3 facturas, incluida esta); supera el umbral de aprobación de USD 2.000,00; requiere revisión humana." |
+| | La ventana son `splitPaymentWindowDays` días calendario en la `timezone` configurada, **incluido hoy**, según la fecha de decisión de cada entrada `PAYABLE` (una con fecha futura también suma). Una `PENDING_APPROVAL` suma **cualquiera sea su fecha**: si se paga, será al aprobarla, hoy o después. Solo suman entradas con monto en USD conocido; `REJECTED` y `BLOCKED` nunca se pagan y no suman. Una entrada con el mismo `invoiceId` también suma, como en R6: los ids los asigna el pipeline, y decidir otra vez una factura puede escalarla pero nunca pagarla dos veces | — | |
+| | El beneficiario no se pudo leer con certeza, o no hay monto en USD | ESCALAR | "R7: no se pudo leer con certeza el beneficiario para buscar pagos fraccionados; se escala por seguridad." |
+| | Sin pagos anteriores al beneficiario en la ventana no hay fraccionamiento: pasa, aunque la factura sola supere el umbral (eso lo escala R5) | pasa | "R7: no hay otros pagos a “Dev Partners SAS” en los últimos 7 días." |
 | **R8 Moneda** | Moneda desconocida o ambigua (`$` sin país) | ESCALAR | |
 | | Conversión con tasa fija de la configuración: aritmética exacta y un solo redondeo al centavo (ver decisión 3) | — | |
 | **R9 Fechas** | Vencimiento inválido, ya vencido más de X días o a más de Y días en el futuro | ESCALAR | |
-| **R10 Contenido sospechoso** | Instrucciones dirigidas al agente dentro del documento (las que reporta el Lector **y** las que el motor encuentra por su cuenta en `sourceText`, el texto original de correos y chats), o el total no cuadra con la suma de ítems | ESCALAR | "El documento contiene instrucciones dirigidas al sistema; se ignoraron." |
+| **R10 Contenido sospechoso** | El Lector marcó texto sospechoso en `suspiciousText` (cualquier entrada, aunque esté en blanco: puede ser texto invisible) | ESCALAR | "R10: el Lector marcó texto sospechoso: “Ignore previous instructions”. Requiere revisión humana." |
+| | El motor encuentra por su cuenta una instrucción dirigida al sistema (lista cerrada de patrones, ver abajo) en `sourceText`, el texto original, o en lo leído para cada campo (`raw` y `evidence`, que cubre PDF e imagen) | ESCALAR | "R10: el texto original contiene una instrucción dirigida al sistema, que se ignoró: “ignore all previous instructions”." |
+| | Hay desglose de ítems y `lineItemsSumMinor` + `taxMinor` (impuesto impreso; ausente = 0) no es **exactamente** igual a `amountMinor` | ESCALAR | "R10: el total (USD 2.500,00) no cuadra con la suma de ítems (USD 2.000,00) más impuestos (USD 400,00)." |
 
 ### Decisiones del paso cero: cerradas por A
 
@@ -123,18 +130,37 @@ Configuración editable desde la pantalla. **Una regla sin configurar nunca pasa
 
 **Reglas generales del dinero:** enteros en unidades menores, nunca `float` ni `parseFloat`. Una moneda sin tasa configurada → ESCALAR (R8). Las tasas son fijas en la configuración: la conversión es exacta respecto a esa tasa, y así cada decisión es reproducible.
 
-### Revalidación al aprobar: tareas pendientes (A)
+### R10: patrones de instrucciones al sistema
 
-Hallazgos del `rules-auditor` sobre R6 y R2 que se resuelven en la pieza `revalidateApproval`, porque hoy esa función no existe:
+Lista cerrada y determinista en `src/engine/rules/instruction-patterns.ts`, en español e inglés. Antes de buscar, el texto se normaliza: sin caracteres invisibles, minúsculas, sin tildes, letras cirílicas o griegas parecidas leídas como latinas y la puntuación y los saltos de línea como espacios.
+
+| Patrón | Detecta | Ejemplo |
+|---|---|---|
+| `OVERRIDE_RULES` | Ignorar, omitir u olvidar reglas, instrucciones, controles, límites o la revisión | "Ignore all previous instructions", "omite las validaciones" |
+| `APPROVE_COMMAND` | Órdenes de aprobar este pago o marcarlo como pagado | "Approve this payment", "márcala como pagada" |
+| `NO_REVIEW` | Pagar sin revisión, no escalar, no requiere aprobación | "pagar hoy sin revisar", "do not escalate" |
+| `AI_ADDRESS` | Texto dirigido a una IA o al sistema | "system prompt", "you are an AI", "eres un asistente", "nuevas instrucciones" |
+| `ROLE_MARKER` | Marcas de rol de chat | `<system>`, `[INST]`, una línea que empieza con `system:` |
+
+"URGENTE", "pagar hoy" o "pay immediately" **no** están en la lista: solos no son instrucciones al sistema. Cuentan solo si vienen con una orden de saltarse un control ("pagar hoy sin revisar"). Lo que marca el Lector nunca se filtra: si el Lector marca la urgencia, R10 escala, porque el contenido solo puede endurecer la decisión.
+
+**Notas para B:** (1) agregar al Lector y al Verificador el impuesto impreso como `taxMinor` (copiado, nunca calculado; `null` si no hay); mientras no exista, toda factura con impuestos escala en R10. (2) Una suma de ítems ilegible hoy llega como `null` y R10 no puede distinguirla de "sin desglose". **Nota para C:** en las facturas con desglose, ítems + impuesto debe dar exactamente el total; un descuento o un envío fuera de los ítems escala.
+
+### Revalidación al aprobar
+
+Hallazgos del `rules-auditor` sobre R6 y R2, **resueltos** en `src/engine/revalidate-approval.ts` (con `checkBudget(ctx, { isApproval: true })` y `checkDuplicateOnApproval`) y probados en `tests/engine/revalidate-approval.test.ts`:
 
 | # | Tarea | Por qué |
 |---|---|---|
 | 1 | R6 recibe el `baseAmountMinor` y la `exchangeRate` **guardados en la decisión**, nunca recalculados con las tasas de hoy. Test con un cambio de tasa entre la escalada y la aprobación. | Invariante 8: si la tasa cambió, el monto recalculado podría caber en el presupuesto cuando el real no cabe |
 | 2 | Al aprobar sin monto en USD, R6 devuelve FRENAR (no "se escala") | Que el mensaje coincida con el resultado final |
 | 3 | Test de la secuencia: aprobar A y luego B, exactamente en el presupuesto y un centavo arriba | Probar que dos aprobaciones nunca exceden el presupuesto |
-| 4 | Al aprobar, R2 solo FRENA por el mismo archivo o por una copia **exacta ya pagable**; no repite los motivos de revisión que la persona ya vio | Si no, ninguna escalada de R2 se podría aprobar (dos pendientes parecidas se bloquearían entre sí) |
+| 4 | Al aprobar, R2 solo FRENA por el mismo archivo **ya pagable** o por una copia **exacta ya pagable**; omite la escalada que se aprueba (`isOwnPendingEntry` en `duplicate-rule.ts`) y no repite los motivos de revisión que la persona ya vio. Una entrada `BLOCKED` o `REJECTED` con el mismo archivo, que puede dejar un reintento, no debe trabar la aprobación. Se omite solo esa entrada, nunca toda fila con el mismo id. Test obligatorio: dos escaladas pendientes del mismo archivo (un reintento); al aprobar una, aprobar la otra FRENA por mismo archivo ya pagable | Si no, ninguna escalada de R2 se podría aprobar (dos pendientes parecidas se bloquearían entre sí) |
+| 5 | Una escalada **rechazada o ya frenada** no se puede aprobar después (por ejemplo el mes siguiente, con presupuesto nuevo); R2 y R6 deben ver el mismo dinero (el de la decisión coincide con el de la factura); un `baseAmountMinor` guardado que su tasa no da no se acepta | Hallazgos del auditor sobre la primera versión: los tres terminaban en PAGAR |
+| 6 | Al aprobar, R2 solo puede pasar o frenar, así que frena solo **la misma factura**: una ya pagable con la **misma referencia** (sin contar formato ni los ceros que inician un número después de una letra: "FAC-0102" es "FAC-102"), mismo monto y moneda, y el mismo beneficiario o alguno ilegible; sin importar cuándo se pagó ni si la referencia se leyó con duda | Que la misma factura nunca se pague dos veces, aunque la copia se haya pagado mientras la escalada esperaba |
+| 7 | Una referencia **parecida** ("FAC-102" y "FAC-103": dos cuotas mensuales) o ilegible queda en manos de quien aprueba, que vio el aviso de R2 al escalar: se aprueban las dos en cualquier orden. **Límite aceptado:** si una copia parecida se pagó mientras la escalada esperaba, el sistema no la vuelve a mostrar al aprobar; lo mismo con ceros dentro de un número ("INV-2026-007" e "INV-2026-7"), que R2 ya avisó al escalar. **Nota para E:** dos aprobaciones al mismo tiempo no se ven entre sí; leer el historial y guardar la aprobación en una sola transacción, o de a una | Un FRENAR al aprobar es definitivo: frenar lo parecido trabaría para siempre cuotas legítimas |
 
-**Notas para E:** la aprobación debe ser idempotente (un reintento no debe contar la factura dos veces), y cuando una escalada se aprueba, su `period` en el historial es el **mes de la aprobación**.
+**Notas para E:** `resolveApproval` llama a `revalidateApproval` para aprobar **y** para rechazar, y guarda el `Approval` tal como lo devuelve. Si `resultingOutcome` es PAY, la entrada del historial pasa a `PAYABLE`; si es BLOCK, pasa a `REJECTED` (rechazo) o `BLOCKED` (aprobación frenada por la revalidación). Si la función lanza un error (ver la tabla de módulos), se responde con error y no se guarda nada: así un rechazo es definitivo y una escalada no se resuelve dos veces. `resolveApproval` también debe rechazar una decisión que ya tiene un `Approval` guardado, **con un test**: el motor verifica que la escalada de la factura siga pendiente, no la decisión (el historial no guarda `decisionId`), así que con dos decisiones de la misma factura esta es la única barrera para reaprobar la rechazada. La aprobación debe ser idempotente (un reintento no debe contar la factura dos veces), y cuando una escalada se aprueba, su `period` en el historial es el **mes de la aprobación** y su `decidedAt` es la **fecha de la aprobación** (R7 ubica la ventana por esa fecha). Un id de factura debe ser único por archivo; si no lo es, R2 y R7 igual comparan y suman la entrada, del lado estricto.
 
 ### Sobre la prioridad del proveedor: decisión tomada, no se hace
 
@@ -303,7 +329,7 @@ sequenceDiagram
         A->>UI: Abre la bandeja: Aprobar o Rechazar + comentario
         UI->>P: POST /api/approvals/[decisionId], resolveApproval(...)
         P->>S: Pide historial actualizado del periodo
-        P->>M: revalidateApproval(decision, config, history, now), solo si aprueba
+        P->>M: revalidateApproval({ request, decision, invoice, config, history, now }), rechazar no revalida
         M-->>P: PASS o BLOCK (duplicado o presupuesto)
         P->>S: Transacción: aprobación + appendAuditEntry (quién, cuándo, por qué)
         P-->>UI: Estado final
@@ -319,7 +345,7 @@ sequenceDiagram
 | `extraction` · B | `verifyExtraction(file, extraction)` (P1) | Segunda lectura independiente; si no coincide en campos críticos, marca incierto. | Sí (Haiku) |
 | `engine` · A | `evaluateRules(invoice, config, history, now)` | Corre R1 a R10, combina por precedencia y devuelve la `Decision` con cada `ruleResult`. | No |
 | `engine` · A | `explainDecision(decision)` | Arma la explicación en español desde las plantillas de `messages.ts`, con los valores comparados. | No |
-| `engine` · A | `revalidateApproval(decision, config, history, now)` | Al aprobar, revalida con el historial actual: R6 con el monto guardado en la decisión, contando solo lo pagable, y R2 solo para frenar por el mismo archivo o una copia exacta ya pagable (ver "Revalidación al aprobar: tareas pendientes"). | No |
+| `engine` · A | `revalidateApproval({ request, decision, invoice, config, history, now })` | Resuelve una escalada y devuelve el `Approval` ya validado con `ApprovalSchema`. Rechazar termina en FRENAR sin revalidar. Aprobar revalida con el historial actual: R6 con el monto guardado en la decisión, en el periodo de la aprobación y contando solo lo pagable, y R2 solo para frenar por el mismo archivo o una copia exacta ya pagable (ver "Revalidación al aprobar"). Lanza un error, sin producir nada, si la decisión no es ESCALAR, es de otra factura, ya no está pendiente (rechazada, frenada o aprobada antes), registra otro monto o moneda que la factura, o un `baseAmountMinor` que su propia tasa guardada no da. | No |
 | `store` · E | `findDecisionByFileHash(fileHash)` | Idempotencia: devuelve la decisión previa o `null`. | No |
 | `store` · E | `listPaymentHistory()` | Facturas pagables y escaladas pendientes de **todos** los periodos, con su tasa y su `baseAmountMinor`. El motor filtra por periodo (R6) o por ventana (R7); R2 necesita todo para frenar duplicados de meses anteriores. | No |
 | `store` · E | `appendAuditEntry(tx, payload)` | Escribe en el registro append-only con hash encadenado, dentro de la transacción. | No |
@@ -402,7 +428,7 @@ Los contratos ya están en `src/contracts/` (uno por concepto, Zod 4) y son la f
 | `dates.ts` | `IsoDateSchema`, `IsoDateTimeSchema`, `PeriodSchema`, `TimezoneSchema` | Fechas guardadas siempre en UTC; periodo `AAAA-MM`; zona horaria IANA válida |
 | `payee.ts` | `normalizePayee`, `PayeeNameSchema` | Una sola forma de comparar nombres, usada por la configuración y por R3: ignora mayúsculas, espacios, caracteres invisibles, puntos y comas; conserva tildes, otros alfabetos y signos como `&` o `-` |
 | `reference.ts` | `normalizeReference`, `ReferenceSchema` | Una sola forma de comparar referencias para R2: ignora mayúsculas, espacios, caracteres invisibles y los separadores `-` (y cualquier guion Unicode o signo menos), `_`, `.`, `/`, `#` y `:`. "FAC-102", "fac 102" y "FAC–102" son la misma |
-| `extraction.ts` | `ExtractionSchema` | Cada campo con `raw`, `value`, `evidence` e `isUncertain`; monto positivo (0 o negativo queda incierto y R1 escala); incluye la fecha de emisión (`issueDate`) que usa R4 |
+| `extraction.ts` | `ExtractionSchema` | Cada campo con `raw`, `value`, `evidence` e `isUncertain`; monto positivo (0 o negativo queda incierto y R1 escala); incluye la fecha de emisión (`issueDate`) que usa R4, y la suma de ítems antes de impuestos (`lineItemsSumMinor`) y el impuesto impreso (`taxMinor`, opcional) que R10 compara con el monto |
 | `invoice.ts` | `InvoiceSchema` | Hash SHA-256 del archivo, formato de origen y `sourceText` (obligatorio en correos y chats) para que R10 no dependa solo del LLM |
 | `rules-config.ts` | `RulesConfigSchema`, `AgreementSchema` | Todos los campos obligatorios; la moneda base con tasa 1; tope mayor que el umbral; nadie permitido y bloqueado a la vez; sin acuerdos solapados para un mismo beneficiario |
 | `history.ts` | `HistoryEntrySchema`, `isCountedInBudget` | Guarda todas las facturas, aunque tengan campos ilegibles; `PAYABLE` exige todos los datos de dinero; una pendiente reserva su `baseAmountMinor` solo si se conoce; guarda tasa y `period`; conserva rechazadas y frenadas para R2 |
@@ -500,6 +526,17 @@ Cada persona es **dueña de una carpeta** y trabaja con su propio Claude Code. N
 **Pitch y video:** A y C (son quienes mejor conocen reglas y números). E arma el README final.
 
 **Regla de independencia:** C escribe los resultados esperados **sin mirar** lo que hace el motor. Si A o B quieren cambiar `expected.csv`, discute el equipo completo. Así nuestra métrica de fugas es creíble.
+
+### Integración del motor: pendientes por persona
+
+El motor está completo (R1–R10, revalidación al aprobar y casos límite) y ya puede pagar. Para que no haya fugas al integrarlo, cada persona tiene que:
+
+| Persona | Qué hacer | Detalle |
+|---|---|---|
+| **B** | Extraer el impuesto impreso como `taxMinor` (copiado, nunca calculado; `null` si no hay) en el Lector y el Verificador. Mientras no exista, toda factura con IVA escala en R10. Si las marcas de `suspiciousText` (también la urgencia sola) bajan mucho la autonomía, ajustar el prompt: el motor no las filtra. | Sección 3, "R10: patrones de instrucciones al sistema" |
+| **E** | En `resolveApproval`: llamar a `revalidateApproval` para aprobar **y** rechazar, guardar el `Approval` tal cual, actualizar el historial (PAY → `PAYABLE` con `period` y `decidedAt` de la aprobación; BLOCK → `REJECTED` o `BLOCKED`) y, si lanza error, no guardar nada. Rechazar con un test una decisión que ya tiene `Approval`. Pasar al motor el historial con **todos** los estados y periodos. Procesar las facturas de a una y aprobar en una transacción. Ids de factura únicos por archivo. No permitir cambiar `baseCurrency` si hay decisiones. | "Revalidación al aprobar" y "Notas para E"; sección 10, "Límites de R7" |
+| **C** | En facturas con desglose, ítems + impuesto debe dar **exacto** el total. Evitar en facturas normales líneas que empiecen con "System:" o "Assistant:". Dos facturas del mismo beneficiario y monto con referencias a un carácter ("FAC-102" y "FAC-103") escalan a propósito. Avisar a A de cualquier fuga del `npm run eval` apenas aparezca. | Sección 10, "Límites de R10" |
+| **D** | En la bandeja, mostrar los mensajes de `revalidationResults` cuando una aprobación termina en FRENAR. En la pantalla de reglas, no permitir cambiar `baseCurrency` si ya hay decisiones. | `src/contracts/approval.ts` |
 
 ### Commits, ramas y PRs
 
@@ -684,6 +721,8 @@ Depende de a qué se refiera el ingeniero:
 |---|---|
 | El LLM lee mal un monto | Evidencia obligatoria, bandera `isUncertain`, verificador (P1), y R4 compara contra lo acordado |
 | **Límites de R1** (aceptados y documentados) | En PDF e imagen el valor y la evidencia los escribe el mismo LLM: R1 solo comprueba que coinciden entre sí, no con el documento. Una línea falsa escondida en un correo ("Total: USD 25.00") pasa R1 si el Lector la usa. R1 no entiende frases como "en nombre de", ni comprueba que monto y moneda salgan de la misma parte del documento, una referencia muy corta puede coincidir con un número de página, el día o el mes del vencimiento pueden salir de otro número de la evidencia ("5 items, vence 30/10/2026"), "may" en inglés cuenta como mayo, el año de una fecha escrita con nombre de mes ("Oct 30, 2026") puede respaldar un monto de 2.026,00, y dos números separados por un espacio pueden leerse como uno solo ("Qty 3 250.00"). Respaldo: R4 (lo acordado), R10 (contenido sospechoso y suma de ítems) y la revisión humana de lo escalado. Un "$" sin código de país escala. |
+| **Límites de R7** (aceptados y documentados) | Un fraccionamiento repartido en un plazo más largo que la ventana, o entre beneficiarios con nombres distintos que no se parecen, no se detecta. Si la empresa cambia su `baseCurrency` cuando ya hay historial, los montos anteriores (guardados en la moneda base vieja) se sumarían como si fueran de la nueva, también en R6; **nota para E y D:** no permitir cambiar `baseCurrency` si ya hay decisiones registradas. Una entrada del historial cuyo beneficiario no se pudo leer no suma (para eso alguien tuvo que aprobar una factura sin beneficiario legible). Dos nombres permitidos distintos para un mismo proveedor real se suman por separado: la configuración debe tener un solo nombre por proveedor. Al aprobar una escalada, R7 no se revalida (solo R2 y R6, invariante 8): quien aprueba ve el mensaje de R7. Dos partes procesadas **al mismo tiempo** no se ven entre sí; **notas para E:** procesar las facturas una por una para que cada una vea a la anterior en el historial, y al aprobar una escalada guardar como `decidedAt` la fecha de la aprobación (como ya se hace con `period`); si conserva la fecha de la escalada, una parte aprobada días después puede quedar fuera de la ventana. |
+| **Límites de R10** (aceptados y documentados) | La lista de patrones es cerrada: letras separadas ("i g n o r e"), leetspeak ("1gn0r3"), otros idiomas y paráfrasis no se detectan, ni un mismo carácter invisible usado a la vez dentro de una palabra y entre palabras (el motor prueba quitarlos y tratarlos como espacio, pero no las dos cosas en un mismo texto), y en PDF e imagen sin `sourceText` el motor solo ve lo que el Lector copió. Un descuento o un envío que el documento no incluye en los ítems escala, y también una línea que empieza con "System:" o "Assistant:" aunque sea legítima (por ejemplo, "System: Acme ERP" en una firma): se acepta porque una línea de rol falsa es el ataque clásico. Respaldo: lo que marca el Lector y la revisión humana de lo escalado. |
 | **Límites de R2** (aceptados y documentados) | La misma factura reenviada en **otra moneda** o con **un centavo de diferencia** no es un duplicado para R2 (R7, fraccionamiento, es el respaldo parcial). Una factura del historial sin monto **y** sin beneficiario o referencia no se usa para comparar, porque coincidiría con demasiadas; tampoco una con monto pero **sin beneficiario**, cuando falta la referencia de cualquiera de las dos facturas. Dos facturas distintas del mismo beneficiario y monto con referencias a un carácter de distancia escalan (falso positivo aceptado: es la dirección segura). |
 | Se acaba la cuota del API durante la demo | Caché por hash; la demo corre offline |
 | Los 5 Claude Code generan código incoherente | Contratos congelados el viernes, glosario y patrones de nombres (6.5) en CLAUDE.md, una carpeta por dueño |

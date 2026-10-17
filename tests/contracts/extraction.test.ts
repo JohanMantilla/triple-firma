@@ -65,6 +65,22 @@ describe("ExtractionSchema", () => {
     ).toBe(false);
   });
 
+  it.each([
+    ["a tax amount", 47_500],
+    ["no tax", null],
+  ])("accepts %s", (_label, taxMinor) => {
+    expect(ExtractionSchema.safeParse({ ...buildExtraction(), taxMinor }).success).toBe(true);
+  });
+
+  it("accepts an extraction without taxMinor, from a reader that does not extract it yet", () => {
+    const { taxMinor: _taxMinor, ...extraction } = buildExtraction();
+    expect(ExtractionSchema.safeParse(extraction).success).toBe(true);
+  });
+
+  it.each([-1, 1.5])("rejects the tax amount %s", (taxMinor) => {
+    expect(ExtractionSchema.safeParse({ ...buildExtraction(), taxMinor }).success).toBe(false);
+  });
+
   it("rejects a payee made only of invisible characters", () => {
     const extraction = buildExtraction();
     extraction.payee = { ...extraction.payee, value: "\u200B \u200D" };

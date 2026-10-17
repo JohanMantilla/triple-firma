@@ -114,8 +114,8 @@ function toHistoryEntry({ record, decisionPeriod, approvalPeriod }: StoredDecisi
   return HistoryEntrySchema.parse({
     invoiceId: invoice.id,
     fileHash: invoice.fileHash,
-    payee: payee.value,
-    reference: reference.value,
+    payee: payee.isUncertain ? null : payee.value,
+    reference: reference.isUncertain ? null : reference.value,
     amountMinor: decision.amountMinor,
     currency: decision.currency,
     exchangeRate: decision.exchangeRate,
