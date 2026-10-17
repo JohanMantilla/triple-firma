@@ -45,8 +45,8 @@ export function evaluateRulesWith(
 
   // Parsing again is a second barrier: an inconsistent decision throws instead of being stored.
   return DecisionSchema.parse({
-    id: `decision-${input.invoice.id}`,
-    invoiceId: input.invoice.id,
+    id: `decision-${ctx.invoice.id}`,
+    invoiceId: ctx.invoice.id,
     outcome,
     ruleResults,
     amountMinor: ctx.amountMinor,
