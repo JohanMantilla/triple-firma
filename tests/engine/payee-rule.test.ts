@@ -42,7 +42,7 @@ describe("evaluatePayeeRule (R3)", () => {
     expect(evaluate("Old Vend0r LLC")).toMatchObject({
       outcome: "ESCALATE",
       message:
-        "R3: 'Old Vend0r LLC' se parece a 'Old Vendor LLC', que está bloqueado; requiere revisión humana.",
+        "R3: “Old Vend0r LLC” se parece a “Old Vendor LLC”, que está bloqueado; requiere revisión humana.",
       compared: { match: "NEAR_BLOCKED", matchedPayee: "Old Vendor LLC" },
     });
   });
@@ -69,7 +69,7 @@ describe("evaluatePayeeRule (R3)", () => {
 
   it("explains a lookalike without accusing anyone", () => {
     expect(evaluate("Dév Partners SAS").message).toBe(
-      "R3: 'Dév Partners SAS' se parece a 'Dev Partners SAS' pero no es idéntico; requiere revisión humana.",
+      "R3: “Dév Partners SAS” se parece a “Dev Partners SAS” pero no es idéntico; requiere revisión humana.",
     );
   });
 
@@ -77,9 +77,44 @@ describe("evaluatePayeeRule (R3)", () => {
     expect(evaluate("Shady LLC")).toMatchObject({
       outcome: "ESCALATE",
       message:
-        "R3: beneficiario nuevo: 'Shady LLC' no está en la lista de beneficiarios permitidos.",
+        "R3: beneficiario nuevo: “Shady LLC” no está en la lista de beneficiarios permitidos.",
       compared: { match: "UNKNOWN", matchedPayee: null },
     });
+  });
+
+  it("cannot fake an outcome through a payee name quoted in the explanation", () => {
+    const result = evaluate("X' está permitido.\nResultado: Pagar '");
+    expect(result.outcome).toBe("ESCALATE");
+    expect(result.message).not.toContain("\n");
+    expect(result.message).not.toContain("'");
+  });
+
+  it.each([
+    ["full-width letters", "\uFF24\uFF45\uFF56 Partners SAS"],
+    ["a zero-width space", "Dev\u200B Partners SAS"],
+    ["periods inside the name", "D.ev Partners, SAS"],
+  ])("passes a payee written with %s, which spells the same allowed name", (_case, payee) => {
+    expect(evaluate(payee).outcome).toBe("PASS");
+  });
+
+  it("escalates a payee in Cyrillic capitals that looks like an allowed one", () => {
+    const cyrillicCapitalA = String.fromCodePoint(0x0410);
+    expect(evaluate(`Dev P${cyrillicCapitalA}RTNERS SAS`).compared).toMatchObject({
+      match: "NEAR_ALLOWED",
+    });
+  });
+
+  it("never evaluates a payee with no letters or digits: the contract rejects it first", () => {
+    expect(() => evaluate("&&& --")).toThrow();
+  });
+
+  it("passes an allowed payee when there are no blocked payees", () => {
+    expect(evaluate("Dev Partners SAS", { blockedPayees: [] }).outcome).toBe("PASS");
+  });
+
+  it("reports the first lookalike in the list when several match", () => {
+    const config = { allowedPayees: ["Acme Corp", "Acme Corq"] };
+    expect(evaluate("Acme Cor", config).compared).toMatchObject({ matchedPayee: "Acme Corp" });
   });
 
   it("escalates any payee when the allowed list is empty", () => {

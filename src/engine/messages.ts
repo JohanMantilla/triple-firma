@@ -68,12 +68,12 @@ export const MESSAGES = {
     unreadable: "R3: no se pudo leer con certeza el beneficiario; se escala por seguridad.",
     blocked: (blocked: string) => `R3: ${blocked} está bloqueado por la empresa.`,
     nearBlocked: (payee: string, blocked: string) =>
-      `R3: '${payee}' se parece a '${blocked}', que está bloqueado; requiere revisión humana.`,
+      `R3: ${quoteUntrusted(payee)} se parece a “${blocked}”, que está bloqueado; requiere revisión humana.`,
     allowed: (allowed: string) => `R3: ${allowed} está en la lista de beneficiarios permitidos.`,
     nearAllowed: (payee: string, allowed: string) =>
-      `R3: '${payee}' se parece a '${allowed}' pero no es idéntico; requiere revisión humana.`,
+      `R3: ${quoteUntrusted(payee)} se parece a “${allowed}” pero no es idéntico; requiere revisión humana.`,
     unknown: (payee: string) =>
-      `R3: beneficiario nuevo: '${payee}' no está en la lista de beneficiarios permitidos.`,
+      `R3: beneficiario nuevo: ${quoteUntrusted(payee)} no está en la lista de beneficiarios permitidos.`,
   },
 };
 
@@ -82,4 +82,23 @@ function listInSpanish(items: readonly string[]): string {
   return items.length <= 1
     ? items.join("")
     : `${items.slice(0, -1).join(", ")} y ${items[items.length - 1]}`;
+}
+
+const MAX_QUOTED_LENGTH = 80;
+
+// Text read from the invoice is untrusted: before quoting it in an explanation, line breaks and
+// control or invisible characters become spaces, quotes are neutralized and it is cut to 80
+// characters, so it cannot fake a sentence such as "Resultado: Pagar" in the audit log.
+export function quoteUntrusted(text: string): string {
+  const clean = text
+    .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, " ")
+    .replace(/['"\u2018\u2019\u201c\u201d]/g, "\u2019")
+    .replace(/\s+/g, " ")
+    .trim();
+  const characters = [...clean];
+  const short =
+    characters.length > MAX_QUOTED_LENGTH
+      ? `${characters.slice(0, MAX_QUOTED_LENGTH).join("")}\u2026`
+      : clean;
+  return `\u201c${short}\u201d`;
 }
