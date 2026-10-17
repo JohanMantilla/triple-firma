@@ -4,6 +4,7 @@ import { makeAnthropicClient, type AnthropicClient } from "./anthropic-client";
 import { readCachedExtraction, writeCachedExtraction } from "./cache";
 import { normalizeExtraction } from "./normalize-extraction";
 import { readInvoice, type ReadResult } from "./reader";
+import { verifyExtraction } from "./verify-extraction";
 
 export type ExtractInvoiceInput = {
   fileHash: string;
@@ -15,6 +16,8 @@ export type ExtractInvoiceInput = {
 export type ExtractInvoiceOptions = {
   client?: AnthropicClient;
   cacheDir?: string;
+  // Second, independent read with the verifier model; a disagreement makes the field uncertain.
+  verify?: boolean;
 };
 
 // A failed result still carries an extraction, with every field uncertain, so the invoice always
@@ -60,10 +63,14 @@ export async function extractInvoice(
     const cachedExtraction = await readCachedExtraction(input.fileHash, options.cacheDir);
     if (cachedExtraction) return { ok: true, extraction: cachedExtraction, cached: true };
 
-    const read = await readWithRetry(options.client ?? makeAnthropicClient(), input);
+    const client = options.client ?? makeAnthropicClient();
+    const read = await readWithRetry(client, input);
     if (!read.ok) return { ok: false, extraction: makeUncertainExtraction(), reason: read.reason };
 
-    const extraction = normalizeExtraction(read.response);
+    const normalized = normalizeExtraction(read.response);
+    const extraction = options.verify
+      ? (await verifyExtraction(client, input, normalized)).extraction
+      : normalized;
     await writeCachedExtraction(input.fileHash, extraction, options.cacheDir);
     return { ok: true, extraction, cached: false };
   } catch (error) {

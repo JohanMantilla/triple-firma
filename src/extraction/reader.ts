@@ -109,11 +109,26 @@ export async function readInvoice(
   sourceText: string | null,
   promptVersion: ReaderPromptVersion = DEFAULT_READER_PROMPT_VERSION,
 ): Promise<ReadResult> {
+  const config = { model: READER_MODEL, systemPrompt: READER_PROMPTS[promptVersion] };
+  return readDocument(client, config, fileBuffer, sourceFormat, sourceText);
+}
+
+export type ReadConfig = { model: string; systemPrompt: string };
+
+// One structured-output read of the document. The reader and the verifier share it and differ only in
+// model and system prompt.
+export async function readDocument(
+  client: AnthropicClient,
+  config: ReadConfig,
+  fileBuffer: Buffer,
+  sourceFormat: SourceFormat,
+  sourceText: string | null,
+): Promise<ReadResult> {
   try {
     const message = await client.messages.create({
-      model: READER_MODEL,
+      model: config.model,
       max_tokens: 2048,
-      system: READER_PROMPTS[promptVersion],
+      system: config.systemPrompt,
       // Structured output guarantees a valid JSON object matching the schema.
       output_config: { format: { type: "json_schema", schema: READER_RESPONSE_JSON_SCHEMA } },
       messages: [{ role: "user", content: buildContent(fileBuffer, sourceFormat, sourceText) }],
