@@ -97,25 +97,27 @@ Configuración editable desde la pantalla. **Una regla sin configurar nunca pasa
 | **R4 Conforme a lo acordado** | Monto, moneda o vigencia no coinciden con el acuerdo (tolerancia configurable, por defecto 0) | FRENAR | "Cobra USD 3.000; lo acordado es USD 2.500 mensuales." |
 | | Sin acuerdo registrado | ESCALAR | |
 | **R5 Límite por pago** | Monto en USD > umbral de aprobación | ESCALAR | "USD 4.200 supera el umbral de aprobación de USD 2.000." |
-| | (Opcional, apagado) Monto > tope absoluto | FRENAR | |
-| **R6 Presupuesto del periodo** | Pagado + aprobado + reservado por escaladas pendientes + este pago > presupuesto mensual | FRENAR | "Presupuesto de octubre: USD 18.400 usados de 20.000; este pago (USD 2.100) lo excede." |
+| | Monto en USD > tope absoluto (opcional; en la empresa ficticia, USD 10.000) | FRENAR | "USD 15.000 supera el tope absoluto de USD 10.000." |
+| **R6 Presupuesto del periodo** | Pagado + aprobado + este pago > presupuesto mensual | FRENAR | "Presupuesto de octubre: USD 18.400 usados de 20.000; este pago (USD 2.100) lo excede." |
+| | Solo se excede al sumar lo comprometido por escaladas pendientes | ESCALAR | "El presupuesto de octubre tiene USD 2.500 comprometidos por escaladas pendientes; este pago lo excedería." |
 | **R7 Fraccionamiento** | Suma al mismo beneficiario en N días > umbral, aunque cada pago esté por debajo | ESCALAR | |
 | **R8 Moneda** | Moneda desconocida o ambigua (`$` sin país) | ESCALAR | |
-| | Conversión con tasa fija de la configuración, redondeo **en contra** del pago | — | |
+| | Conversión con tasa fija de la configuración: aritmética exacta y un solo redondeo al centavo (ver decisión 3) | — | |
 | **R9 Fechas** | Vencimiento inválido, ya vencido más de X días o a más de Y días en el futuro | ESCALAR | |
 | **R10 Contenido sospechoso** | Instrucciones dirigidas al agente dentro del documento, o el total no cuadra con la suma de ítems | ESCALAR | "El documento contiene instrucciones dirigidas al sistema; se ignoraron." |
 
-### Decisiones abiertas, con nuestra recomendación
+### Decisiones del paso cero: cerradas por A
 
-| Decisión | Recomendación | Costo de equivocarnos |
-|---|---|---|
-| ¿Uno o dos umbrales en R5? | Uno (aprobación) más un tope absoluto opcional y apagado | Bajo |
-| ¿Las escaladas pendientes reservan presupuesto? | **Sí.** Si no, dos aprobaciones pueden pasarse juntas del presupuesto. Además se revalida al aprobar. | Alto si no se hace (posible fuga) |
-| ¿Presupuesto insuficiente se frena o se escala? | FRENAR: es objetivo y además cuenta como autonomía | Bajo |
-| R4 que no cuadra: ¿frenar o escalar? | FRENAR si cobra **más** de lo acordado; ESCALAR si cobra menos | Medio |
-| Zona horaria del periodo | La de la empresa (America/New_York), configurable | Medio, por casos de frontera de mes |
-| Dinero | Enteros en centavos. Tasas como string decimal. Nunca `float`. | Alto si se usa float |
-| ¿Umbral distinto según la prioridad del proveedor? | **No en este hackatón.** Usamos un umbral único (ver abajo). | Bajo |
+| # | Decisión | Qué se decidió | Cómo queda en los contratos |
+|---|---|---|---|
+| 1 | ¿Las escaladas pendientes reservan presupuesto? | **Sí** (control de compromisos, como en finanzas). Si lo **pagado o aprobado** más este pago excede el presupuesto → **FRENAR**. Si solo se excede al sumar las **escaladas pendientes** → **ESCALAR**, porque la pendiente aún podría rechazarse. Al aprobar se revalida siempre, así que en ningún orden hay fuga. | El historial incluye las escaladas con estado `PENDING` |
+| 2 | ¿Cuántos umbrales tiene R5? | **Dos.** Umbral de aprobación: si el monto es **estrictamente mayor** → ESCALAR (USD 2.000,00 pasa; USD 2.000,01 escala). Tope absoluto **opcional**: si se supera → FRENAR, sin opción de aprobar. En la empresa ficticia el tope está encendido en **USD 10.000**. | `approvalThresholdMinor` y `hardCapMinor` (opcional, `null` = apagado) |
+| 3 | ¿Cómo se convierte la moneda? | **Como en contabilidad:** cada factura se convierte a USD **una sola vez**, con la tasa fija de la configuración, aritmética exacta de enteros (`BigInt`) y **un único redondeo al centavo** (mitad hacia arriba). Ese monto en USD queda registrado junto con la tasa usada, y todas las comparaciones y sumas se hacen en **centavos enteros de USD**. Nunca hay fracciones de centavo que escalen una factura por error, y lo que se compara es exactamente lo que se muestra. | Tasas como **texto decimal** en unidades por 1 USD (`"4000"`, `"18.50"`, `"1"`). Cada decisión y cada entrada del historial guardan `amountMinor`, `currency`, `exchangeRate` y `baseAmountMinor` (USD en centavos). |
+| 4 | Zona horaria del periodo | `America/New_York`, configurable | `timezone` en la configuración |
+| 5 | R4: la factura no cuadra con lo acordado | Cobra **más** de lo acordado → FRENAR. Cobra **menos** → ESCALAR. | `toleranceMinor` (por defecto 0) |
+| — | ¿Umbral distinto según la prioridad del proveedor? | **No en este hackatón.** Umbral único (ver abajo). | — |
+
+**Reglas generales del dinero:** enteros en unidades menores, nunca `float` ni `parseFloat`. Una moneda sin tasa configurada → ESCALAR (R8). Las tasas son fijas en la configuración: la conversión es exacta respecto a esa tasa, y así cada decisión es reproducible.
 
 ### Sobre la prioridad del proveedor: decisión tomada, no se hace
 
@@ -239,13 +241,13 @@ La matriz de errores es asimétrica: PAGAR de más es falla crítica; frenar o e
 2. **D trabaja desde el viernes sin esperar a E.** Con `NEXT_PUBLIC_USE_MOCK_API=true`, `api-client.ts` devuelve datos de ejemplo de `src/lib/mocks/`, validados con los mismos esquemas de `contracts/` para que no se desvíen de las respuestas reales. Cuando E termina un endpoint, se apaga la variable y la pantalla no cambia.
 3. **El contrato entre los dos lados son los esquemas de `contracts/` y la tabla de la API** de abajo. Si un endpoint cambia su respuesta, se cambia primero el esquema (con aprobación de A) y los dos lados se ajustan a él.
 
-El motor es una **función pura**: `evaluateRules(invoice, config, history, now) → Decision`. Sin `history` (pagos y aprobaciones del periodo), R2 no podría detectar duplicados ni R6 saber cuánto presupuesto queda; por eso es un parámetro obligatorio. Como `now` entra por parámetro, la misma entrada siempre da la misma decisión, y los tests de frontera de mes o de zona horaria son triviales. P1: hacer cumplir la tabla con la regla `no-restricted-imports` de ESLint (unos 10 minutos).
+El motor es una **función pura**: `evaluateRules(invoice, config, history, now) → Decision`. Sin `history` (pagos, aprobaciones y escaladas pendientes), R2 no podría detectar duplicados ni R6 saber cuánto presupuesto queda; por eso es un parámetro obligatorio. Como `now` entra por parámetro, la misma entrada siempre da la misma decisión, y los tests de frontera de mes o de zona horaria son triviales. P1: hacer cumplir la tabla con la regla `no-restricted-imports` de ESLint (unos 10 minutos).
 
 **Flujo de una factura** (`pipeline/processInvoice`):
 
 1. Se calcula el SHA-256 del archivo. Si ya existe una decisión para ese hash, se devuelve la misma. Así un reenvío no genera un segundo pago.
 2. **Extracción:** si hay caché se usa; si no, se llama al Lector, se valida con Zod y se normaliza. Cualquier error se convierte en una extracción marcada como incierta, que R1 escala.
-3. Se cargan desde `store` la versión vigente de la configuración y el historial del periodo.
+3. Se cargan desde `store` la versión vigente de la configuración y el historial de pagos (pagables y escaladas pendientes).
 4. **Motor:** evalúa R1 a R10, combina por precedencia y genera las explicaciones.
 5. **En una sola transacción** se guardan la decisión y la entrada del registro con su hash. libSQL serializa las escrituras (en local y en Turso), así que no hay carrera por el presupuesto.
 6. Si la decisión es ESCALAR, va a la bandeja. Al aprobar se revalidan R2 y R6 y se escribe otra entrada en el registro.
@@ -273,7 +275,7 @@ sequenceDiagram
         Note over X: Solo recibe el documento: no ve reglas, límites ni historial.<br/>Error, timeout o JSON inválido = extracción incierta
         X-->>P: Datos + evidencia + isUncertain (centavos, fechas ISO)
         P->>S: Pide config vigente e historial del periodo
-        S-->>P: rulesConfig, history
+        S-->>P: rulesConfig, history (todos los pagos y pendientes)
         P->>M: evaluateRules(invoice, config, history, now)
         M-->>P: Decision (R1 a R10 + explicación)
         P->>S: Transacción: decisión + appendAuditEntry (hash encadenado)
@@ -302,7 +304,7 @@ sequenceDiagram
 | `engine` · A | `explainDecision(decision)` | Arma la explicación en español desde las plantillas de `messages.ts`, con los valores comparados. | No |
 | `engine` · A | `revalidateApproval(decision, config, history, now)` | Al aprobar, vuelve a correr R2 y R6 con el historial actual. | No |
 | `store` · E | `findDecisionByFileHash(fileHash)` | Idempotencia: devuelve la decisión previa o `null`. | No |
-| `store` · E | `listPeriodHistory(period)` | Pagos, aprobaciones y escaladas pendientes del periodo (para R2, R6 y R7). | No |
+| `store` · E | `listPaymentHistory()` | Facturas pagables y escaladas pendientes de **todos** los periodos, con su tasa y su `baseAmountMinor`. El motor filtra por periodo (R6) o por ventana (R7); R2 necesita todo para frenar duplicados de meses anteriores. | No |
 | `store` · E | `appendAuditEntry(tx, payload)` | Escribe en el registro append-only con hash encadenado, dentro de la transacción. | No |
 | `store` · E | `verifyAuditChain()` | Recorre la cadena de hashes y reporta la primera entrada alterada, si la hay. | No |
 | `pipeline` · E | `processInvoice(file)` | Orquesta el flujo completo de una factura. | No |
@@ -375,57 +377,25 @@ triple-firma/
 
 **Contratos primero.** Los esquemas Zod de `src/contracts/` se congelan el viernes a las 10 pm. Desde ahí cada persona trabaja en su carpeta contra los contratos y con datos de ejemplo, sin bloquear a nadie.
 
-```ts
-// src/contracts (boceto, la versión final la cierra A el viernes)
-const extractedField = <T extends z.ZodTypeAny>(value: T) =>
-  z.object({ raw: z.string().nullable(), value: value.nullable(), evidence: z.string().nullable(), isUncertain: z.boolean() });
+Los contratos ya están en `src/contracts/` (uno por concepto, Zod 4) y son la fuente única de tipos:
 
-export const ExtractedInvoiceSchema = z.object({
-  payee: extractedField(z.string()), amountMinor: extractedField(z.number().int()), currency: extractedField(z.string()),
-  dueDate: extractedField(z.string()), reference: extractedField(z.string()),
-  lineItemsTotalMinor: z.number().int().nullable(), suspiciousText: z.array(z.string()),
-});
-export type ExtractedInvoice = z.infer<typeof ExtractedInvoiceSchema>;
-
-export const RuleResultSchema = z.object({
-  ruleId: z.enum(["R1","R2","R3","R4","R5","R6","R7","R8","R9","R10"]),
-  outcome: z.enum(["PASS","ESCALATE","BLOCK"]),
-  message: z.string(),                                  // frase con valores
-  compared: z.record(z.string(), z.union([z.string(), z.number()])),
-});
-export type RuleResult = z.infer<typeof RuleResultSchema>;
-
-export const DecisionSchema = z.object({
-  invoiceId: z.string(), outcome: z.enum(["PAY","BLOCK","ESCALATE"]),
-  ruleResults: z.array(RuleResultSchema), configVersion: z.string(), decidedAt: z.string(),
-});
-export type Decision = z.infer<typeof DecisionSchema>;
-```
+| Archivo | Esquemas principales | Qué garantiza el propio esquema |
+|---|---|---|
+| `money.ts` | `CurrencyCodeSchema`, `ExchangeRateSchema`, `MinorAmountSchema` | Montos enteros; tasas como texto decimal positivo, nunca `number` |
+| `dates.ts` | `IsoDateSchema`, `IsoDateTimeSchema`, `TimezoneSchema` | Fechas ISO y zona horaria IANA válida |
+| `extraction.ts` | `ExtractionSchema` | Cada campo con `raw`, `value`, `evidence` e `isUncertain` |
+| `invoice.ts` | `InvoiceSchema` | Hash SHA-256 del archivo y formato de origen |
+| `rules-config.ts` | `RulesConfigSchema`, `AgreementSchema` | Todos los campos obligatorios; la moneda base con tasa 1; tope mayor que el umbral; nadie permitido y bloqueado a la vez |
+| `history.ts` | `HistoryEntrySchema` | Guarda la tasa usada y el `baseAmountMinor` de cada pago o escalada pendiente |
+| `decision.ts` | `DecisionSchema`, `RuleResultSchema`, `combineRuleOutcomes` | R1 a R10 evaluadas exactamente una vez; la decisión es la más restrictiva; PAGAR siempre registra monto en USD y tasa |
+| `approval.ts` | `ApprovalRequestSchema`, `ApprovalSchema` | Comentario obligatorio; rechazar termina en FRENAR; aprobar solo paga si la revalidación pasó |
+| `audit-entry.ts` | `AuditEntrySchema` | Solo la primera entrada no tiene `prevHash` |
 
 ### 6.5 Consistencia de nombres entre todos
 
 Además de las buenas prácticas, **el repo tiene que leerse como si lo hubiera escrito una sola persona**, no como 5 proyectos pegados. Por eso cada concepto tiene **un solo nombre** en todas las capas (contratos, motor, extracción, base de datos, API y UI), y cada tipo de archivo sigue el mismo patrón.
 
-**Glosario obligatorio** (lo mantiene A; va completo en `CLAUDE.md`):
-
-| Concepto | En el código | No usar | En la UI (español) |
-|---|---|---|---|
-| Factura o cuenta de cobro | `invoice` | `bill`, `factura`, `document` | Factura |
-| Quien cobra | `payee` | `vendor`, `supplier`, `provider`, `beneficiary` | Beneficiario |
-| Monto | `amountMinor` (centavos) + `currency` | `amount`, `total`, `price`, `value` | Monto |
-| Moneda | `currency`, en ISO 4217 (`USD`, `COP`, `MXN`, `ARS`) | `coin`, `curr` | Moneda |
-| Fecha de vencimiento | `dueDate` | `expiration`, `deadline` | Vencimiento |
-| Número de la factura | `reference` | `invoiceNumber`, `ref`, `folio` | Referencia |
-| Lo acordado con el beneficiario | `agreement` | `contract`, `deal` | Acuerdo |
-| Lista de beneficiarios permitidos | `allowedPayees` | `whitelist`, `vendors` | Beneficiarios permitidos |
-| Reglas configurables | `rulesConfig` | `settings`, `policy`, `options` | Reglas |
-| Resultado de una regla | `ruleResult`, con `ruleId` y `outcome` | `check`, `validation` | Resultado por regla |
-| Decisión final | `decision.outcome`: `PAY` / `BLOCK` / `ESCALATE` | `approve`, `hold`, `reject`, `PAID` | Pagar / Frenar / Escalar |
-| Aprobación humana | `approval`, `approver`, `action`: `APPROVE` / `REJECT` | `review`, `signoff` | Aprobar / Rechazar |
-| Periodo | `period` (`"2026-10"`) | `month`, `cycle` | Periodo |
-| Presupuesto | `budget` | `balance`, `limit` | Presupuesto |
-| Registro de auditoría | `auditEntry` | `log`, `history`, `event` | Registro |
-| Datos leídos del documento | `extraction` | `parse`, `ocr`, `readResult` | Datos extraídos |
+**Glosario obligatorio:** la versión vigente y completa está en `CLAUDE.md` (sección *Glossary*), que es la fuente única. Así el Claude Code de cada persona lo lee siempre actualizado y no hay dos versiones que se contradigan. Incluye los términos del paso cero: `baseAmountMinor`, `exchangeRate`, `approvalThresholdMinor`, `hardCapMinor`, `toleranceMinor`, `timezone`, `blockedPayees` y `history` (con estados `PAYABLE` y `PENDING_APPROVAL`).
 
 **Patrones por tipo de elemento:**
 
