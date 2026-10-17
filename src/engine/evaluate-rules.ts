@@ -18,6 +18,7 @@ import { evaluateDueDateRule } from "./rules/due-date-rule";
 import { evaluateExtractionRule } from "./rules/extraction-rule";
 import { evaluatePayeeRule } from "./rules/payee-rule";
 import { evaluatePaymentLimitRule } from "./rules/payment-limit-rule";
+import { evaluateSuspiciousContentRule } from "./rules/suspicious-content-rule";
 
 export type RuleEvaluator = (ctx: RuleContext) => RuleResult;
 
@@ -33,7 +34,7 @@ const RULES: Record<RuleId, RuleEvaluator> = {
   R7: notImplemented("R7"),
   R8: evaluateCurrencyRule,
   R9: evaluateDueDateRule,
-  R10: notImplemented("R10"),
+  R10: evaluateSuspiciousContentRule,
 };
 
 export type EvaluateRulesInput = RuleContextInput & { configVersion: number };
