@@ -158,6 +158,7 @@ function classify(entry: HistoryEntry, invoiceReference: string | null): Match |
 
 // "FAC-00102" -> "FAC-102", "INV-2026-007" -> "INV-2026-7": leading zeros of every run of digits are
 // dropped. It runs on the reference as written, before normalizeReference joins its digit groups.
+// Full-width digits are folded first (NFKC), so "INV-\uFF10\uFF10\uFF17" loses its zeros too.
 function stripLeadingZeros(reference: string): string {
-  return reference.replace(/(?<!\d)0+(?=\d)/g, "");
+  return reference.normalize("NFKC").replace(/(?<!\d)0+(?=\d)/g, "");
 }

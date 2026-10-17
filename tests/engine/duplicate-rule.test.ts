@@ -107,6 +107,18 @@ describe("evaluateDuplicateRule (R2)", () => {
     });
   });
 
+  it("escalates full-width leading zeros as a near duplicate", () => {
+    const fullWidth = (invoice: Invoice) => {
+      invoice.extraction.reference = {
+        ...invoice.extraction.reference,
+        value: "INV-\uFF10\uFF10\uFF17",
+      };
+    };
+    expect(evaluate([past({ reference: "INV-7" })], fullWidth).compared).toMatchObject({
+      matchType: "NEAR",
+    });
+  });
+
   it("explains a near duplicate without accusing anyone", () => {
     expect(evaluate([past({ reference: "INV-103" })]).message).toBe(
       "R2: posible duplicado de la factura “INV-103” (esta factura: “INV-102”); requiere revisión humana.",

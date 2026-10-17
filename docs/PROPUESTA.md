@@ -318,7 +318,7 @@ sequenceDiagram
 | `extraction` · B | `verifyExtraction(file, extraction)` (P1) | Segunda lectura independiente; si no coincide en campos críticos, marca incierto. | Sí (Haiku) |
 | `engine` · A | `evaluateRules(invoice, config, history, now)` | Corre R1 a R10, combina por precedencia y devuelve la `Decision` con cada `ruleResult`. | No |
 | `engine` · A | `explainDecision(decision)` | Arma la explicación en español desde las plantillas de `messages.ts`, con los valores comparados. | No |
-| `engine` · A | `revalidateApproval(decision, config, history, now)` | Al aprobar, vuelve a correr R2 y R6 con el historial actual. | No |
+| `engine` · A | `revalidateApproval(decision, config, history, now)` | Al aprobar, revalida con el historial actual: R6 con el monto guardado en la decisión, contando solo lo pagable, y R2 solo para frenar por el mismo archivo o una copia exacta ya pagable (ver "Revalidación al aprobar: tareas pendientes"). | No |
 | `store` · E | `findDecisionByFileHash(fileHash)` | Idempotencia: devuelve la decisión previa o `null`. | No |
 | `store` · E | `listPaymentHistory()` | Facturas pagables y escaladas pendientes de **todos** los periodos, con su tasa y su `baseAmountMinor`. El motor filtra por periodo (R6) o por ventana (R7); R2 necesita todo para frenar duplicados de meses anteriores. | No |
 | `store` · E | `appendAuditEntry(tx, payload)` | Escribe en el registro append-only con hash encadenado, dentro de la transacción. | No |
