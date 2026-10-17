@@ -89,23 +89,28 @@ const WORD_PATTERNS: readonly (readonly [InstructionPatternId, RegExp])[] = [
 
 // Chat role markers are punctuation, so they are searched before punctuation becomes spaces. Spaces
 // after a slash are only looked for when there is a slash: two optional runs of spaces in a row would
-// make a "<" followed by 200,000 spaces take quadratic time.
+// make a "<" followed by 200,000 spaces take quadratic time. A role line may be quoted or formatted:
+// "> System:", "- System:", "**System**:".
 const ROLE_MARKER_PATTERN =
-  /<\s*(?:\/\s*)?(?:system|assistant|user|instructions?|prompt)\s*>|<\|\s*(?:im_start|im_end|system|endoftext)\s*\|>|\[\s*(?:\/\s*)?(?:inst|system|sys)\s*\]|<<\s*(?:\/\s*)?sys\s*>>|^[ \t>#*]*(?:system|assistant)[ \t]*:/m;
+  /<\s*(?:\/\s*)?(?:system|assistant|user|instructions?|prompt)\s*>|<\|\s*(?:im_start|im_end|system|endoftext)\s*\|>|\[\s*(?:\/\s*)?(?:inst|system|sys)\s*\]|<<\s*(?:\/\s*)?sys\s*>>|^[ \t>#*\-\u2022]*(?:system|assistant)\**[ \t]*:/m;
 
 // Format characters, Hangul fillers (letters that render as nothing) and control characters other
 // than tabs and line breaks are removed, so they cannot split a word: "ign" + U+3164 + "ore".
 const INVISIBLE_CHARACTERS =
   /[\p{Cf}\u115F\u1160\u3164\uFFA0\u0000-\u0008\u000E-\u001F\u007F-\u0084\u0086-\u009F]/gu;
 
+// Vertical tab, form feed and next line end a line, but JavaScript's "^" does not see them as line starts.
+const LINE_SEPARATORS = /[\u000B\u000C\u0085]/g;
+
 // Invisible characters, compatibility forms, case, accents and lookalike letters from other scripts
 // never hide a phrase: a zero-width space inside a word, "aprobación" and a Cyrillic i read the same
-// as plain Latin text.
-function foldText(text: string): string {
+// as plain Latin text. Invisible characters become the given replacement: nothing or a space.
+function foldText(text: string, invisibleAs: "" | " "): string {
   return replaceLookalikeLetters(
     text
       .normalize("NFKC")
-      .replace(INVISIBLE_CHARACTERS, "")
+      .replace(LINE_SEPARATORS, "\n")
+      .replace(INVISIBLE_CHARACTERS, invisibleAs)
       .toLowerCase()
       .normalize("NFD")
       .replace(/\p{M}/gu, ""),
@@ -118,9 +123,14 @@ function toWords(folded: string): string {
 }
 
 // The first instruction to the system found in the text, or null. The match is quoted from the folded
-// text, so it is lowercase and without accents.
+// text, so it is lowercase and without accents. Invisible characters are tried both removed and as a
+// space, so they can neither split a word ("ign" + U+200B + "ore") nor join two ("ignore" + U+200B +
+// "the" + U+200B + "rules").
 export function findInstruction(text: string): InstructionMatch | null {
-  const folded = foldText(text);
+  return findInFolded(foldText(text, "")) ?? findInFolded(foldText(text, " "));
+}
+
+function findInFolded(folded: string): InstructionMatch | null {
   const words = toWords(folded);
   for (const [patternId, pattern] of WORD_PATTERNS) {
     const found = pattern.exec(words);
