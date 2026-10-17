@@ -1,7 +1,7 @@
 import { normalizePayee } from "@/contracts/payee";
 import { isWithinOneEdit } from "./edit-distance";
 
-// Cyrillic and Greek letters that look like Latin ones, written as code points so the source has no
+// Cyrillic, Greek and IPA letters that look like Latin ones, written as code points so the source has no
 // lookalike characters: [code point, Latin letter].
 const LOOKALIKE_LETTERS: readonly (readonly [number, string])[] = [
   [0x0430, "a"],
@@ -15,6 +15,9 @@ const LOOKALIKE_LETTERS: readonly (readonly [number, string])[] = [
   [0x0458, "j"],
   [0x0455, "s"],
   [0x04bb, "h"],
+  [0x04cf, "l"],
+  [0x0501, "d"],
+  [0x051d, "w"],
   [0x03b1, "a"],
   [0x03b5, "e"],
   [0x03b9, "i"],
@@ -25,6 +28,10 @@ const LOOKALIKE_LETTERS: readonly (readonly [number, string])[] = [
   [0x03c4, "t"],
   [0x03c5, "u"],
   [0x03c7, "x"],
+  [0x0131, "i"],
+  [0x0251, "a"],
+  [0x0261, "g"],
+  [0x026a, "i"],
 ];
 const LATIN_FOR = new Map(
   LOOKALIKE_LETTERS.map(([codePoint, latin]) => [String.fromCodePoint(codePoint), latin]),
