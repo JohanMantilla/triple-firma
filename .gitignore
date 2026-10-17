@@ -26,7 +26,24 @@ next-env.d.ts
 # vercel
 .vercel
 
-# misc
+# personal Claude Code settings (shared agents in .claude/agents are committed)
+.claude/settings.local.json
+CLAUDE.local.md
+
+# editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# tooling caches and logs
+.eslintcache
+*.log
+
+# OS files
 .DS_Store
+Thumbs.db
+desktop.ini
+
+# misc
 *.pem
-npm-debug.log*
