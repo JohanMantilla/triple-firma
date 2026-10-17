@@ -1,4 +1,4 @@
-import { IsoDateTimeSchema, type Period } from "@/contracts/dates";
+import { IsoDateTimeSchema, type Period, PeriodSchema } from "@/contracts/dates";
 import { type HistoryEntry, HistoryEntrySchema } from "@/contracts/history";
 import { type Invoice, InvoiceSchema } from "@/contracts/invoice";
 import { type ExchangeRate, isSupportedCurrency } from "@/contracts/money";
@@ -62,7 +62,8 @@ export function buildRuleContext(input: RuleContextInput): RuleContext {
 }
 
 // "2026-11-01T03:30:00Z" is still October in America/New_York. Parsing the injected timestamp is
-// deterministic; the engine never reads the current time.
+// deterministic; the engine never reads the current time. The result is validated, so a year outside
+// 1000-9999 throws instead of reaching the rules as a malformed period.
 export function toPeriod(isoUtc: string, timezone: string): Period {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
@@ -71,7 +72,7 @@ export function toPeriod(isoUtc: string, timezone: string): Period {
   }).formatToParts(new Date(isoUtc));
   const year = parts.find((part) => part.type === "year")?.value;
   const month = parts.find((part) => part.type === "month")?.value;
-  return `${year}-${month}`;
+  return PeriodSchema.parse(`${year}-${month}`);
 }
 
 function deepFreeze<T>(value: T): T {

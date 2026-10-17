@@ -79,4 +79,15 @@ describe("toPeriod", () => {
   ])("puts %s in %s into the period %s", (isoUtc, timezone, expected) => {
     expect(toPeriod(isoUtc, timezone)).toBe(expected);
   });
+
+  it("handles the last millisecond of the month", () => {
+    expect(toPeriod("2026-11-01T03:59:59.999Z", "America/New_York")).toBe("2026-10");
+  });
+
+  it.each([
+    ["a year below 1000", "0500-01-01T00:00:00Z", "UTC"],
+    ["a year above 9999", "9999-12-31T23:00:00Z", "Asia/Tokyo"],
+  ])("throws for %s instead of returning a malformed period", (_case, isoUtc, timezone) => {
+    expect(() => toPeriod(isoUtc, timezone)).toThrow();
+  });
 });
