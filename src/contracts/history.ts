@@ -4,6 +4,7 @@ import { Sha256Schema } from "./invoice";
 import {
   CurrencyCodeSchema,
   ExchangeRateSchema,
+  isBaseAmountConsistent,
   isSupportedCurrency,
   MinorAmountSchema,
   PositiveMinorAmountSchema,
@@ -70,11 +71,11 @@ export const HistoryEntrySchema = z
       });
     }
 
-    if (entry.baseAmountMinor !== null && !hasCompleteMoneyData) {
+    if (!isBaseAmountConsistent(entry)) {
       ctx.addIssue({
         code: "custom",
         message:
-          "A base amount requires the amount, a supported currency and the exchange rate it came from",
+          "baseAmountMinor must be recorded exactly when amount, a supported currency and exchange rate are known",
         path: ["baseAmountMinor"],
       });
     }

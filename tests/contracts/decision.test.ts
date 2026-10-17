@@ -85,10 +85,20 @@ describe("DecisionSchema", () => {
     expect(DecisionSchema.safeParse(buildDecision({ currency: "EUR" })).success).toBe(false);
   });
 
+  it("rejects an ESCALATE decision that could be converted but has no base amount", () => {
+    const decision = buildDecision({
+      outcome: "ESCALATE",
+      ruleResults: buildRuleResults({ R5: "ESCALATE" }),
+      baseAmountMinor: null,
+    });
+    expect(DecisionSchema.safeParse(decision).success).toBe(false);
+  });
+
   it("accepts ESCALATE without base amount when the currency is unknown", () => {
     const decision = buildDecision({
       outcome: "ESCALATE",
       ruleResults: buildRuleResults({ R8: "ESCALATE" }),
+      currency: "EUR",
       baseAmountMinor: null,
       exchangeRate: null,
     });

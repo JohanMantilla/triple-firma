@@ -3,6 +3,7 @@ import { IsoDateTimeSchema } from "./dates";
 import {
   CurrencyCodeSchema,
   ExchangeRateSchema,
+  isBaseAmountConsistent,
   isSupportedCurrency,
   MinorAmountSchema,
   PositiveMinorAmountSchema,
@@ -81,6 +82,15 @@ export const DecisionSchema = z
         code: "custom",
         message:
           "A PAY decision must record its amount, a supported currency, base amount and exchange rate",
+        path: ["baseAmountMinor"],
+      });
+    }
+
+    if (!isBaseAmountConsistent(decision)) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "baseAmountMinor must be recorded exactly when amount, a supported currency and exchange rate are known",
         path: ["baseAmountMinor"],
       });
     }

@@ -46,6 +46,10 @@ describe("HistoryEntrySchema", () => {
     expect(HistoryEntrySchema.safeParse(unreadable).success).toBe(true);
   });
 
+  it("rejects a convertible pending escalation without its base amount, so it cannot skip the budget", () => {
+    expect(HistoryEntrySchema.safeParse({ ...entry, baseAmountMinor: null }).success).toBe(false);
+  });
+
   it.each([
     ["without its exchange rate", { exchangeRate: null }],
     ["without its amount", { amountMinor: null }],

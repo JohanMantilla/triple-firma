@@ -4,6 +4,7 @@ import { type RuleId, RuleResultSchema } from "./decision";
 import {
   CurrencyCodeSchema,
   ExchangeRateSchema,
+  isBaseAmountConsistent,
   isSupportedCurrency,
   MinorAmountSchema,
   PositiveMinorAmountSchema,
@@ -47,6 +48,15 @@ export const ApprovalSchema = ApprovalRequestSchema.extend({
       code: "custom",
       message:
         "An approval that pays must record its amount, a supported currency, exchange rate and base amount",
+      path: ["baseAmountMinor"],
+    });
+  }
+
+  if (!isBaseAmountConsistent(approval)) {
+    ctx.addIssue({
+      code: "custom",
+      message:
+        "baseAmountMinor must be recorded exactly when amount, a supported currency and exchange rate are known",
       path: ["baseAmountMinor"],
     });
   }

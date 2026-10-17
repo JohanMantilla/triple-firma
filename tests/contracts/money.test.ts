@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CurrencyCodeSchema,
   ExchangeRateSchema,
+  isBaseAmountConsistent,
   isExchangeRateOne,
   isSupportedCurrency,
   MinorAmountSchema,
@@ -59,6 +60,43 @@ describe("ExchangeRateSchema", () => {
 
   it("rejects numbers, so rates never pass through floating point", () => {
     expect(ExchangeRateSchema.safeParse(18.5).success).toBe(false);
+  });
+});
+
+describe("isBaseAmountConsistent", () => {
+  const converted = {
+    amountMinor: 150_000,
+    currency: "USD",
+    exchangeRate: "1",
+    baseAmountMinor: 150_000,
+  };
+
+  it("accepts a base amount with everything it came from", () => {
+    expect(isBaseAmountConsistent(converted)).toBe(true);
+  });
+
+  it("accepts no base amount when the invoice cannot be converted", () => {
+    expect(isBaseAmountConsistent({ ...converted, amountMinor: null, baseAmountMinor: null })).toBe(
+      true,
+    );
+    expect(isBaseAmountConsistent({ ...converted, currency: "EUR", baseAmountMinor: null })).toBe(
+      true,
+    );
+    expect(
+      isBaseAmountConsistent({ ...converted, exchangeRate: null, baseAmountMinor: null }),
+    ).toBe(true);
+  });
+
+  it("rejects a missing base amount when the invoice could be converted", () => {
+    expect(isBaseAmountConsistent({ ...converted, baseAmountMinor: null })).toBe(false);
+  });
+
+  it.each([
+    ["amount", { amountMinor: null }],
+    ["supported currency", { currency: "EUR" }],
+    ["exchange rate", { exchangeRate: null }],
+  ])("rejects a base amount without its %s", (_case, change) => {
+    expect(isBaseAmountConsistent({ ...converted, ...change })).toBe(false);
   });
 });
 

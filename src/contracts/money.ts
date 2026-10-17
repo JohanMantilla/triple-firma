@@ -27,6 +27,25 @@ export const ExchangeRateSchema = z
   .refine((rate) => /[1-9]/.test(rate), "Exchange rate must be greater than zero");
 export type ExchangeRate = z.infer<typeof ExchangeRateSchema>;
 
+type MoneyData = {
+  amountMinor: number | null;
+  currency: string | null;
+  exchangeRate: string | null;
+  baseAmountMinor: number | null;
+};
+
+// The base amount is recorded exactly when it can be computed: amount, a supported currency and the
+// rate used are all known. A record that could be converted but has no base amount would silently
+// skip the budget, so it is invalid; so is a base amount without the data it came from.
+export function isBaseAmountConsistent(money: MoneyData): boolean {
+  const canConvert =
+    money.amountMinor !== null &&
+    money.currency !== null &&
+    isSupportedCurrency(money.currency) &&
+    money.exchangeRate !== null;
+  return canConvert === (money.baseAmountMinor !== null);
+}
+
 export function isExchangeRateOne(rate: ExchangeRate): boolean {
   return /^0*1(\.0+)?$/.test(rate);
 }
