@@ -51,8 +51,8 @@ export function evaluateDuplicateRule(ctx: RuleContext): RuleResult {
 }
 
 // R2 at approval (invariant 8): it can only pass or block, so it blocks only what is the same invoice.
-// The same file, or a PAYABLE invoice with the same reference (ignoring format and leading zeros:
-// "FAC-0102" is "FAC-102"), amount and currency, from the same payee or with either payee unreadable,
+// The same file, or a PAYABLE invoice with the same reference (ignoring format and the zeros that start
+// a number after a letter: "FAC-0102" is "FAC-102"), amount and currency, from the same payee or with either payee unreadable,
 // blocks, however uncertain the reading and whenever it was paid, so the same invoice is never paid
 // twice. A near reference ("FAC-102" vs "FAC-103": two fixed monthly fees), matches with rejected or
 // blocked invoices, an unreadable reference and other pending escalations are left to the approver,
