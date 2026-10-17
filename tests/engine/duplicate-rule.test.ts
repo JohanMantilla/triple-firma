@@ -358,9 +358,61 @@ describe("evaluateDuplicateRule (R2)", () => {
     expect(evaluate([past({ reference: "INV-102", payee: null })]).outcome).toBe("ESCALATE");
   });
 
-  it("does not compare the invoice with its own history entry", () => {
-    const itself = past({ invoiceId: "inv-1", fileHash: VALID_HASH, reference: "INV-102" });
-    expect(evaluate([itself]).outcome).toBe("PASS");
+  it("escalates an invoice decided again while its own escalation is still pending", () => {
+    const itself = past({
+      invoiceId: "inv-1",
+      fileHash: VALID_HASH,
+      reference: "INV-102",
+      status: "PENDING_APPROVAL",
+    });
+    expect(evaluate([itself])).toEqual({
+      ruleId: "R2",
+      outcome: "ESCALATE",
+      message:
+        "R2: esta factura ya está pendiente de aprobación como inv-1; la decide una persona.",
+      compared: {
+        matchType: "OWN_PENDING",
+        matchedInvoiceId: "inv-1",
+        matchedStatus: "PENDING_APPROVAL",
+        matchedReference: "INV-102",
+      },
+    });
+  });
+
+  it("still blocks when, besides its own pending escalation, a paid copy exists", () => {
+    const itself = past({ invoiceId: "inv-1", fileHash: VALID_HASH, status: "PENDING_APPROVAL" });
+    const paidCopy = past({ invoiceId: "inv-0", reference: "INV-102" });
+    expect(evaluate([itself, paidCopy])).toMatchObject({
+      outcome: "BLOCK",
+      compared: { matchType: "EXACT", matchedInvoiceId: "inv-0" },
+    });
+  });
+
+  it("blocks an invoice that was already paid when it is decided again, so it is never paid twice", () => {
+    const paid = past({ invoiceId: "inv-1", fileHash: VALID_HASH, reference: "INV-102" });
+    expect(evaluate([paid])).toMatchObject({
+      outcome: "BLOCK",
+      message: "R2: este mismo archivo ya se procesó como la factura inv-1.",
+      compared: { matchType: "SAME_FILE", matchedInvoiceId: "inv-1", matchedStatus: "PAYABLE" },
+    });
+  });
+
+  it.each([["REJECTED" as const], ["BLOCKED" as const]])(
+    "blocks its own %s entry decided again as the same file",
+    (status) => {
+      const resolved = past({ invoiceId: "inv-1", fileHash: VALID_HASH, status });
+      expect(evaluate([resolved]).outcome).toBe("BLOCK");
+    },
+  );
+
+  it("compares an entry with this invoice's id but another file like any other invoice", () => {
+    const reusedId = past({ invoiceId: "inv-1", fileHash: "c".repeat(64), reference: "INV-102" });
+    expect(evaluate([reusedId])).toMatchObject({
+      outcome: "BLOCK",
+      compared: { matchType: "EXACT", matchedInvoiceId: "inv-1" },
+    });
+    const pendingReusedId = { ...reusedId, status: "PENDING_APPROVAL" as const };
+    expect(evaluate([pendingReusedId]).outcome).toBe("BLOCK");
   });
 
   it("prefers blocking over escalating when several past invoices match", () => {

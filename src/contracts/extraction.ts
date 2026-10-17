@@ -16,6 +16,9 @@ export function extractedFieldSchema<T extends z.ZodType>(value: T) {
 
 // A zero or negative amount is not a valid value: the reader leaves it null and uncertain, so R1 escalates.
 // issueDate is when the invoice was issued: R4 checks the agreement was in force on that date.
+// lineItemsSumMinor is the sum of the line items before tax and taxMinor the tax printed on the invoice,
+// copied and never computed; R10 checks that together they equal the amount. taxMinor may be absent
+// while the reader does not extract it yet: absent or null means no tax was read.
 export const ExtractionSchema = z.object({
   payee: extractedFieldSchema(PayeeNameSchema),
   amountMinor: extractedFieldSchema(PositiveMinorAmountSchema),
@@ -24,6 +27,7 @@ export const ExtractionSchema = z.object({
   dueDate: extractedFieldSchema(IsoDateSchema),
   reference: extractedFieldSchema(ReferenceSchema),
   lineItemsSumMinor: MinorAmountSchema.nullable(),
+  taxMinor: MinorAmountSchema.nullable().optional(),
   suspiciousText: z.array(z.string()),
 });
 export type Extraction = z.infer<typeof ExtractionSchema>;
