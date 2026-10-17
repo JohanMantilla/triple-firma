@@ -121,27 +121,26 @@ Un archivo cuya extracción falló queda en ESCALATE para esos mismos bytes (es 
 
 ## API
 
-| Método | Ruta                          | Para qué                                                      |
-| ------ | ----------------------------- | ------------------------------------------------------------- |
-| `POST` | `/api/invoices`               | Subir una factura (campo `file`: PDF, imagen, `.eml`, `.txt`) |
-| `GET`  | `/api/invoices/[id]/file`     | Ver el documento original                                     |
-| `GET`  | `/api/decisions?status=…`     | Listar decisiones (`PENDING_APPROVAL` = bandeja)              |
-| `GET`  | `/api/decisions/[id]`         | Detalle: datos extraídos, reglas, explicación y aprobación    |
-| `GET`  | `/api/config` · `PUT`         | Leer o guardar las reglas (cada cambio es una versión nueva)  |
-| `POST` | `/api/approvals/[decisionId]` | Aprobar o rechazar con `{ action, approver, comment }`        |
-| `GET`  | `/api/audit/verify`           | Verificar la cadena de hashes del registro                    |
-| `GET`  | `/api/metrics`                | Métricas contra `data/expected.csv`                           |
+| Método | Ruta                      | Para qué                                                      |
+| ------ | ------------------------- | ------------------------------------------------------------- |
+| `POST` | `/api/invoices`           | Subir una factura (campo `file`: PDF, imagen, `.eml`, `.txt`) |
+| `GET`  | `/api/invoices/[id]/file` | Ver el documento original                                     |
+| `GET`  | `/api/decisions?status=…` | Listar decisiones (`PENDING_APPROVAL` = bandeja)              |
+| `GET`  | `/api/decisions/[id]`     | Detalle: datos extraídos, reglas, explicación y aprobación    |
+| `GET`  | `/api/config` · `PUT`     | Leer o guardar las reglas (cada cambio es una versión nueva)  |
+| `GET`  | `/api/audit/verify`       | Verificar la cadena de hashes del registro                    |
+| `GET`  | `/api/metrics`            | Métricas contra `data/expected.csv`                           |
 
 ## Deploy (Vercel + Turso)
 
-La base del deploy es `triple-firma-demo` y **solo E la reinicia**. La base compartida nunca va en `.env.local`: usa un archivo aparte, `.env.demo` (ya ignorado por git).
+La base del deploy es `triple-firma-demo` y **solo quien despliega la reinicia**. La base compartida nunca va en `.env.local`: usa un archivo aparte, `.env.demo` (ya ignorado por git).
 
 1. Crea la base de la demo: `turso db create triple-firma-demo`, y copia su URL y un token.
 2. Importa el repo en Vercel y agrega `TURSO_DATABASE_URL` y `TURSO_AUTH_TOKEN`. **No** agregues `ANTHROPIC_API_KEY`: la URL pública funciona desde la caché, y una factura nueva se escala por seguridad.
 3. Carga la base desde tu máquina con esas variables en `.env.demo`: `npx tsx --env-file=.env.demo scripts/demo.ts`.
-4. Abre la URL, aprueba una escalada, recarga y comprueba que sigue aprobada.
+4. Abre la URL y comprueba que `GET /api/decisions` responde y que `GET /api/audit/verify` devuelve `isValid: true`. La aprobación desde la bandeja llegará con el endpoint de aprobaciones.
 
-> **Advertencia:** el paso 3 **reinicia la base a la que apunta** `.env.demo`. Además, `PUT /api/config` y las aprobaciones no tienen autenticación: no compartas el deploy público más allá del jurado hasta protegerlas.
+> **Advertencia:** el paso 3 **reinicia la base a la que apunta** `.env.demo`. Además, `PUT /api/config` (y la futura aprobación de escaladas) no tiene autenticación: no compartas el deploy público más allá del jurado hasta protegerlas.
 
 ## Plan B sin internet
 
