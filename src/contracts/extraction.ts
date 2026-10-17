@@ -15,10 +15,12 @@ export function extractedFieldSchema<T extends z.ZodType>(value: T) {
 }
 
 // A zero or negative amount is not a valid value: the reader leaves it null and uncertain, so R1 escalates.
+// issueDate is when the invoice was issued: R4 checks the agreement was in force on that date.
 export const ExtractionSchema = z.object({
   payee: extractedFieldSchema(PayeeNameSchema),
   amountMinor: extractedFieldSchema(PositiveMinorAmountSchema),
   currency: extractedFieldSchema(CurrencyCodeSchema),
+  issueDate: extractedFieldSchema(IsoDateSchema),
   dueDate: extractedFieldSchema(IsoDateSchema),
   reference: extractedFieldSchema(ReferenceSchema),
   lineItemsSumMinor: MinorAmountSchema.nullable(),

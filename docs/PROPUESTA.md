@@ -97,8 +97,8 @@ Configuración editable desde la pantalla. **Una regla sin configurar nunca pasa
 | | 3. Coincidencia exacta con un beneficiario permitido | pasa | |
 | | 4. Coincidencia aproximada con un permitido: difiere en tildes, en una letra de otro alfabeto (por ejemplo, una "a" cirílica que se ve igual a la latina), en un carácter o en signos como `&` o `-` ("Acmé Corp", "A&B" vs "AB"). Las diferencias de mayúsculas, espacios, puntos y comas ("Corp." vs "Corp", "S.A.S." vs "SAS") **no** cuentan: son coincidencia exacta | ESCALAR | "El nombre se parece a 'Dev Partners SAS' pero no es idéntico." |
 | | 5. No está en ninguna lista | ESCALAR | "Beneficiario nuevo: no está en la lista permitida." |
-| **R4 Conforme a lo acordado** | Monto, moneda o vigencia no coinciden con el acuerdo (tolerancia configurable en la **moneda del acuerdo**, por defecto 0) | FRENAR | "Cobra USD 3.000; lo acordado es USD 2.500 mensuales." |
-| | Sin acuerdo registrado | ESCALAR | |
+| **R4 Conforme a lo acordado** | Con el acuerdo del beneficiario (nombre idéntico): la factura se emitió **fuera de la vigencia** del acuerdo (se compara la **fecha de emisión**, `issueDate`, como en cuentas por pagar), la moneda no coincide, o cobra **más** de lo acordado más la tolerancia (en la moneda del acuerdo, por defecto 0) | FRENAR | "Cobra USD 3.000; lo acordado es USD 2.500 mensuales." |
+| | Sin acuerdo registrado, cobra **menos** de lo acordado menos la tolerancia, o la fecha de emisión es ilegible o no la respalda su evidencia | ESCALAR | "No hay un acuerdo registrado con “Shady LLC”." |
 | **R5 Límite por pago** | Monto en USD > umbral de aprobación | ESCALAR | "USD 4.200 supera el umbral de aprobación de USD 2.000." |
 | | Monto en USD > tope absoluto (opcional; en la empresa ficticia, USD 10.000) | FRENAR | "USD 15.000 supera el tope absoluto de USD 10.000." |
 | **R6 Presupuesto del periodo** | Pagado + aprobado + este pago > presupuesto mensual | FRENAR | "Presupuesto de octubre: USD 18.400 usados de 20.000; este pago (USD 2.100) lo excede." |
@@ -388,7 +388,7 @@ Los contratos ya están en `src/contracts/` (uno por concepto, Zod 4) y son la f
 | `dates.ts` | `IsoDateSchema`, `IsoDateTimeSchema`, `PeriodSchema`, `TimezoneSchema` | Fechas guardadas siempre en UTC; periodo `AAAA-MM`; zona horaria IANA válida |
 | `payee.ts` | `normalizePayee`, `PayeeNameSchema` | Una sola forma de comparar nombres, usada por la configuración y por R3: ignora mayúsculas, espacios, caracteres invisibles, puntos y comas; conserva tildes, otros alfabetos y signos como `&` o `-` |
 | `reference.ts` | `normalizeReference`, `ReferenceSchema` | Una sola forma de comparar referencias para R2: ignora mayúsculas, espacios, caracteres invisibles y los separadores `-` (y cualquier guion Unicode o signo menos), `_`, `.`, `/`, `#` y `:`. "FAC-102", "fac 102" y "FAC–102" son la misma |
-| `extraction.ts` | `ExtractionSchema` | Cada campo con `raw`, `value`, `evidence` e `isUncertain`; monto positivo (0 o negativo queda incierto y R1 escala) |
+| `extraction.ts` | `ExtractionSchema` | Cada campo con `raw`, `value`, `evidence` e `isUncertain`; monto positivo (0 o negativo queda incierto y R1 escala); incluye la fecha de emisión (`issueDate`) que usa R4 |
 | `invoice.ts` | `InvoiceSchema` | Hash SHA-256 del archivo, formato de origen y `sourceText` (obligatorio en correos y chats) para que R10 no dependa solo del LLM |
 | `rules-config.ts` | `RulesConfigSchema`, `AgreementSchema` | Todos los campos obligatorios; la moneda base con tasa 1; tope mayor que el umbral; nadie permitido y bloqueado a la vez; sin acuerdos solapados para un mismo beneficiario |
 | `history.ts` | `HistoryEntrySchema`, `isCountedInBudget` | Guarda todas las facturas, aunque tengan campos ilegibles; `PAYABLE` exige todos los datos de dinero; una pendiente reserva su `baseAmountMinor` solo si se conoce; guarda tasa y `period`; conserva rechazadas y frenadas para R2 |
