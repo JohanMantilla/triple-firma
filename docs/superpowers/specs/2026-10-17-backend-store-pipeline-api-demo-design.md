@@ -453,24 +453,30 @@ Route handlers stay thin and are checked manually with `curl` (see Verification)
 
 ### Delivery order
 
-One PR each, on a branch named `<type>/<scope>-<topic>`.
+E's commits follow the list in PROPUESTA §7 exactly, in that order. Each one is a PR titled like its commit, on a branch named `<type>/<scope>-<topic>`, and squash-merged with CI green. Commits 1 and 2 are already on `main`.
 
-1. `feat(contracts): add api response schemas`. This unblocks D's mocks; it needs A, a second reviewer and the `rules-auditor`.
-2. `feat(store): add libsql schema and repositories`. The same PR updates `.env.example`, `CLAUDE.md` ("Getting started": the database is no longer a local file) and the README setup steps for Turso.
-3. `feat(store): add append-only audit log with sha256 hash chain`. The contract already requires `hash`, so the chain cannot wait for P1.
-4. `feat(pipeline): add invoice processing pipeline`, after B merges.
-5. `feat(api): add invoice, decision and config endpoints`
-6. `feat(pipeline): add approval resolution with revalidation` and `feat(api): add approval endpoint`, after A's placeholder.
-7. `feat(pipeline): compute metrics against expected decisions` and `feat(api): add metrics and audit verify endpoints`
-8. `feat(scripts): add demo, demo:live and demo:tamper commands`
-9. P1: `feat(api): serve original invoice files`, `ci: run eval on every push`, and `docs: add readme with setup, demo and metrics` (Spanish).
-10. P2:
-    - **Vercel:**
-      - point it at `triple-firma-demo` by setting `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in Vercel;
-      - add `serverExternalPackages: ["@libsql/client"]` if bundling fails;
-      - add `outputFileTracingIncludes` for `data/expected.csv` and `data/cache`;
-      - seed by running `npx tsx --env-file=<demo env file> scripts/demo.ts` locally.
-    - **MCP server:** cut first.
+| # | Commit (exact title from the list) | Contents | Depends on |
+|---|---|---|---|
+| 1 | `chore: initialize next.js project with typescript, tailwind and vitest` | Done (`4b73661`) | — |
+| 2 | `docs: add CLAUDE.md with team conventions` | Done (`48892af`, landed as `docs: add CLAUDE.md, proposal and team conventions`) | — |
+| 3 | `feat(store): add libsql schema and repositories` | `db.ts`, `schema.ts` (all 5 tables), the config, invoice, decision and approval repositories, the history and status mapping, `tests/store/decision-repository.test.ts`. Also `.env.example`, the `CLAUDE.md` "Getting started" line and step 2 of the README's "Puesta en marcha" (the three Turso commands), because this commit introduces the Turso requirement; commit 12 completes the README | Contracts prerequisite (below) |
+| 4 | `feat(store): add append-only audit log` | `audit-log.ts` (`appendAuditEntry`, `canonicalJson`), the append-only triggers, and tests that `UPDATE` and `DELETE` fail | 3 |
+| 5 | `feat(pipeline): add invoice processing pipeline` | `process-invoice.ts`, `save-rules-config.ts`, `dataset.ts` and their tests | 4, and B merged |
+| 6 | `feat(api): add invoice, decision and config endpoints` | `POST /api/invoices`, `GET /api/invoices/[id]/file`, `GET /api/decisions`, `GET /api/decisions/[id]`, `GET` / `PUT /api/config` | 5 |
+| 7 | `feat(api): add approval endpoint with revalidation` | `resolve-approval.ts` and its tests together with `POST /api/approvals/[decisionId]`: one logical change, one commit | 6, and A's `revalidateApproval` |
+| 8 | `feat(store): chain audit entries with sha256 hashes` | `verifyAuditChain`, `GET /api/audit/verify`, the tamper-detection tests | 4 |
+| 9 | `feat(scripts): add demo, demo:live and demo:tamper commands` | `scripts/demo.ts`, `scripts/demo-tamper.ts`, the `package.json` scripts | 8, and C's `company.json` |
+| + | `feat(pipeline): compute metrics against expected decisions` (**extra**) | `compute-metrics.ts`, `GET /api/metrics` and tests. Not in the list: it comes from the decision that E owns the metrics formula, so A must be told | C's `expected.csv` format |
+| 10 | `ci: run lint, tests and eval on every push` | Adds `npm run eval` to `ci.yml`; lint and tests already run | C's `eval.ts`, which needs the extra commit |
+| 11 | `chore: configure turso database for vercel deployment` | Vercel env vars for `triple-firma-demo`; `serverExternalPackages: ["@libsql/client"]` if bundling fails; `outputFileTracingIncludes` for `data/expected.csv` and `data/cache`; seed with `npx tsx --env-file=<demo env file> scripts/demo.ts` | 9 |
+| 12 | `docs: add readme with setup, deploy steps and metrics` | Spanish README: Turso setup per developer, the demo commands, the deploy steps and the metrics table | 11 |
+
+**Where the list collides with the merged contracts:**
+- **Commits 4 and 8.** `AuditEntrySchema` (merged in #1) requires `hash`, and requires `prevHash` on every entry after the first. Entries written by commit 4 therefore already carry their SHA-256 hash and the link to the previous entry. Writing fake hashes to keep the split literal would be worse. Commit 8 then adds what makes the chain useful: verification, its endpoint and the tamper tests. Its commit body explains this split.
+- **Response schemas.** `feat(contracts): add api response schemas` must land before commit 3, but `contracts/` is A's folder. Either A commits it, or E opens it with A's approval, a second reviewer and the `rules-auditor`. It does not count in E's list.
+- **This spec.** With squash merge, its branch becomes one extra `docs:` commit outside the list. If A prefers to keep it out of `main`, it stays on its branch.
+
+The MCP server is P2, is not in the list, and is the first thing cut.
 
 ### Verification
 
