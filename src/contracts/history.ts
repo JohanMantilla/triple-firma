@@ -9,6 +9,7 @@ import {
   PositiveMinorAmountSchema,
 } from "./money";
 import { PayeeNameSchema } from "./payee";
+import { ReferenceSchema } from "./reference";
 
 // PAYABLE: paid automatically or approved by a person. PENDING_APPROVAL: escalated, reserving budget.
 // REJECTED and BLOCKED never count toward the budget, but they stay in history so a resubmitted copy
@@ -34,7 +35,7 @@ export const HistoryEntrySchema = z
     invoiceId: z.string().min(1),
     fileHash: Sha256Schema,
     payee: PayeeNameSchema,
-    reference: z.string().trim().min(1),
+    reference: ReferenceSchema,
     amountMinor: PositiveMinorAmountSchema,
     currency: CurrencyCodeSchema,
     exchangeRate: ExchangeRateSchema.nullable(),

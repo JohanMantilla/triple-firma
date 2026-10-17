@@ -2,6 +2,7 @@ import { z } from "zod";
 import { IsoDateSchema } from "./dates";
 import { CurrencyCodeSchema, MinorAmountSchema, PositiveMinorAmountSchema } from "./money";
 import { PayeeNameSchema } from "./payee";
+import { ReferenceSchema } from "./reference";
 
 // Every extracted field keeps what the document said, where it said it and whether the reader was sure.
 export function extractedFieldSchema<T extends z.ZodType>(value: T) {
@@ -19,7 +20,7 @@ export const ExtractionSchema = z.object({
   amountMinor: extractedFieldSchema(PositiveMinorAmountSchema),
   currency: extractedFieldSchema(CurrencyCodeSchema),
   dueDate: extractedFieldSchema(IsoDateSchema),
-  reference: extractedFieldSchema(z.string().trim().min(1)),
+  reference: extractedFieldSchema(ReferenceSchema),
   lineItemsSumMinor: MinorAmountSchema.nullable(),
   suspiciousText: z.array(z.string()),
 });

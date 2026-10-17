@@ -88,8 +88,8 @@ Configuración editable desde la pantalla. **Una regla sin configurar nunca pasa
 | Regla | Condición | Resultado | Ejemplo de explicación |
 |---|---|---|---|
 | **R1 Extracción completa** | Falta un campo obligatorio, hay un campo con `isUncertain`, el esquema es inválido o no hay evidencia | ESCALAR | "No se pudo leer con certeza el monto." |
-| **R2 Duplicado** | Exacto: beneficiario + monto + moneda + referencia normalizados ya registrados | FRENAR | "Ya se pagó la factura FAC-102 de Café Andino (COP 4.500.000) el 03/10." |
-| | Casi duplicado (difiere en puntuación, espacios o un carácter) | ESCALAR | "Posible duplicado de FAC-102, requiere revisión." |
+| **R2 Duplicado** | Exacto: mismo beneficiario (`normalizePayee`), monto, moneda y referencia (`normalizeReference`, que ignora mayúsculas, espacios, guiones, barras y puntos) ya pagada o pendiente | FRENAR | "Ya se pagó la factura FAC-102 de Café Andino (COP 4.500.000) el 03/10." |
+| | Casi duplicado: la referencia difiere en un carácter o en ceros a la izquierda ("FAC-102" vs "FAC-103" o "FAC-0102") con el mismo beneficiario y monto | ESCALAR | "Posible duplicado de FAC-102, requiere revisión." |
 |                                | Coincide con una factura que antes fue **rechazada** por una persona o **frenada** (aunque sea otro archivo)       | ESCALAR | "Esta factura coincide con FAC-102, que fue rechazada el 03/10; requiere revisión." |
 | **R3 Beneficiario** | Coincidencia exacta normalizada | pasa | |
 | | Coincidencia aproximada ("Corp" vs "Corp.", Unicode parecido) | ESCALAR | "El nombre se parece a 'Dev Partners SAS' pero no es idéntico." |
@@ -385,6 +385,7 @@ Los contratos ya están en `src/contracts/` (uno por concepto, Zod 4) y son la f
 | `money.ts` | `CurrencyCodeSchema`, `SupportedCurrencySchema`, `ExchangeRateSchema`, `MinorAmountSchema` | Montos enteros; tasas como texto decimal positivo, nunca `number`; la configuración solo admite USD, COP, MXN y ARS (todas con 2 decimales) |
 | `dates.ts` | `IsoDateSchema`, `IsoDateTimeSchema`, `PeriodSchema`, `TimezoneSchema` | Fechas guardadas siempre en UTC; periodo `AAAA-MM`; zona horaria IANA válida |
 | `payee.ts` | `normalizePayee`, `PayeeNameSchema` | Una sola forma de comparar nombres (mayúsculas, puntuación, espacios, caracteres invisibles), usada por la configuración y por R3 |
+| `reference.ts` | `normalizeReference`, `ReferenceSchema` | Una sola forma de comparar referencias para R2 (mayúsculas, espacios, guiones, barras, puntos y caracteres invisibles): "FAC-102" y "fac 102" son la misma |
 | `extraction.ts` | `ExtractionSchema` | Cada campo con `raw`, `value`, `evidence` e `isUncertain`; monto positivo (0 o negativo queda incierto y R1 escala) |
 | `invoice.ts` | `InvoiceSchema` | Hash SHA-256 del archivo, formato de origen y `sourceText` (obligatorio en correos y chats) para que R10 no dependa solo del LLM |
 | `rules-config.ts` | `RulesConfigSchema`, `AgreementSchema` | Todos los campos obligatorios; la moneda base con tasa 1; tope mayor que el umbral; nadie permitido y bloqueado a la vez; sin acuerdos solapados para un mismo beneficiario |
