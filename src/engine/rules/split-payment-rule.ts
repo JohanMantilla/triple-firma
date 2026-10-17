@@ -4,6 +4,7 @@ import { normalizePayee } from "@/contracts/payee";
 import { formatMoney } from "../format-money";
 import { MESSAGES } from "../messages";
 import { daysBetween, type RuleContext, toLocalDate } from "../rule-context";
+import { isNearPayee } from "./payee-similarity";
 
 // R7: a payment split into smaller invoices must not slip under the approval threshold. This invoice
 // plus the earlier payments to the same payee within the window are summed in the base currency;
@@ -13,8 +14,9 @@ import { daysBetween, type RuleContext, toLocalDate } from "../rule-context";
 // Earlier payments are PAYABLE and PENDING_APPROVAL entries (the parts of a split usually arrive
 // together, so the first ones may still be pending) with a known base amount; REJECTED and BLOCKED
 // are never paid. The window applies to PAYABLE entries only: a pending escalation, if it is ever paid,
-// is paid when approved, today or later, so it counts whatever date it was escalated on. The payee must
-// match exactly through normalizePayee: a look-alike name is R3's job.
+// is paid when approved, today or later, so it counts whatever date it was escalated on. The payee
+// matches through normalizePayee or, as in R3, as a look-alike name: R3 escalates the look-alike
+// invoice itself, but once a person approved it, the next invoice with the exact name must still add it.
 // An entry with this invoice's id counts too, as in R6: ids are assigned outside the engine, and
 // deciding an invoice again can then escalate it but never pay it twice (R7 is not revalidated at
 // approval). Without earlier payments there is no split, and an invoice that alone exceeds the
@@ -94,10 +96,15 @@ function isEarlierPart(
 ): entry is HistoryEntry & { baseAmountMinor: number } {
   if (!isCountedInBudget(entry.status)) return false;
   if (entry.baseAmountMinor === null || entry.payee === null) return false;
-  if (normalizePayee(entry.payee) !== normalizePayee(payee)) return false;
+  if (!isSamePayee(entry.payee, payee)) return false;
   if (entry.status === "PENDING_APPROVAL") return true;
   const decidedOn = toLocalDate(entry.decidedAt, ctx.config.timezone);
   return daysBetween(decidedOn, today) < ctx.config.splitPaymentWindowDays;
+}
+
+// Counting a look-alike name can only add parts, so it never makes the rule pass.
+function isSamePayee(entryPayee: string, payee: string): boolean {
+  return normalizePayee(entryPayee) === normalizePayee(payee) || isNearPayee(entryPayee, payee);
 }
 
 // Sums stay exact: a total beyond safe integers throws, and the runner escalates the rule.

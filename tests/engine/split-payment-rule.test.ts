@@ -238,10 +238,24 @@ describe("evaluateSplitPaymentRule (R7)", () => {
       expect(evaluate({ history }).outcome).toBe("ESCALATE");
     });
 
-    it("does not count another payee, nor a look-alike name, which R3 escalates", () => {
+    it.each([
+      ["an accent", "Dev Partnérs SAS"],
+      ["a missing letter", "Dev Partner SAS"],
+      ["a Cyrillic letter", `Dev P${String.fromCodePoint(0x0430)}rtners SAS`],
+    ])(
+      "counts a look-alike name with %s, approved by a person after R3 escalated it",
+      (_case, payee) => {
+        expect(evaluate({ history: [earlier(100_001, { payee })] })).toMatchObject({
+          outcome: "ESCALATE",
+          compared: { earlierCount: 1 },
+        });
+      },
+    );
+
+    it("does not count another payee", () => {
       const history = [
         earlier(100_001, { invoiceId: "inv-a", payee: "Café Andino SAS" }),
-        earlier(100_001, { invoiceId: "inv-b", payee: "Dev Partner SAS" }),
+        earlier(100_001, { invoiceId: "inv-b", payee: "Dev Solutions SAS" }),
       ];
       expect(evaluate({ history })).toMatchObject({
         outcome: "PASS",

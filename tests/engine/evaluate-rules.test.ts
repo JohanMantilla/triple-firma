@@ -100,6 +100,20 @@ describe("evaluateRules", () => {
     ]);
   });
 
+  it("does not pay when an approved part was billed under a look-alike name", () => {
+    const approvedLookAlike = buildHistoryEntry({
+      invoiceId: "inv-a",
+      payee: "Dev Partnérs SAS",
+      reference: "INV-090",
+      amountMinor: 100_000,
+      baseAmountMinor: 100_000,
+      decidedAt: "2026-10-16T14:00:00Z",
+    });
+    const decision = evaluateRules({ ...cleanInput, history: [approvedLookAlike] });
+    expect(decision.outcome).toBe("ESCALATE");
+    expect(decision.ruleResults.find((result) => result.ruleId === "R7")?.outcome).toBe("ESCALATE");
+  });
+
   it("escalates the fixture invoice over the default threshold, never paying it", () => {
     expect(evaluateRules(input).outcome).toBe("ESCALATE");
   });
