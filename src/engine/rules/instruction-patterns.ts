@@ -19,7 +19,10 @@ const upToWordsExcept = (n: number, excluded: readonly string[]) =>
   `(?:(?!(?:${excluded.join("|")}) )[\\p{L}\\p{N}]+ ){0,${n}}?`;
 
 // "Returns are not accepted without prior approval" is an ordinary clause, not an order to the system.
-// After a payment verb the exclusion does not apply: "pay without prior approval" is an order.
+// After a payment verb the exclusion does not apply: "pay without prior approval" is an order. The words
+// in between cannot start another clause, since punctuation is gone: "bank transfer only. No refunds
+// without prior approval" is two sentences, while "pay only today without prior approval" is one.
+const CLAUSE_START_WORDS = ["no", "not", "never", "nunca"];
 const TERMS_WORDS = ["prior", "previous", "written", "advance", "previa", "previo", "escrita"];
 
 // Whole words only, on text reduced to lowercase words separated by single spaces.
@@ -56,7 +59,7 @@ const WORD_PATTERNS: readonly (readonly [InstructionPatternId, RegExp])[] = [
     wordsPattern([
       `(?:without|skip|skipping|bypass|bypassing) ${upToWordsExcept(2, TERMS_WORDS)}(?:reviews?|reviewing|approvals?|approving|verifications?|verifying|checks|checking|controls|validations?|escalation|escalating)(?! (?:in advance|in writing))`,
       `(?:do not|don t|dont|never|no need to) ${upToWords(1)}(?:escalate|flag|block|review|verify|check)`,
-      `(?:pay|release|transfer|wire|pagar|pague|paguen|paga|transferir|transfiera|liberar|libere) ${upToWords(3)}(?:without|sin) ${upToWords(2)}(?:reviews?|reviewing|approvals?|approving|verifications?|checks|checking|controls|validations?|revisar|revision|aprobacion|aprobar|verificar|verificacion|validar|validacion|controles|control)`,
+      `(?:pay|release|transfer|wire|pagar|pague|paguen|paga|transferir|transfiera|liberar|libere) ${upToWordsExcept(3, CLAUSE_START_WORDS)}(?:without|sin) ${upToWords(2)}(?:reviews?|reviewing|approvals?|approving|verifications?|checks|checking|controls|validations?|revisar|revision|aprobacion|aprobar|verificar|verificacion|validar|validacion|controles|control)`,
       "(?:does not|doesn t|do not|don t) (?:need|require) (?:any |further |additional )?(?:review|approval|verification|escalation)",
       `(?:no|not) ${upToWords(1)}(?:review|approval|verification|escalation) (?:is )?(?:needed|required|necessary)`,
       `sin ${upToWordsExcept(2, TERMS_WORDS)}(?:revisar|revision|aprobacion|aprobar|verificar|verificacion|validar|validacion|escalar|consultar|controles|control)(?! (?:previa|previo|por escrito))`,
@@ -95,21 +98,22 @@ const ROLE_MARKER_PATTERN =
   /<\s*(?:\/\s*)?(?:system|assistant|user|instructions?|prompt)\s*>|<\|\s*(?:im_start|im_end|system|endoftext)\s*\|>|\[\s*(?:\/\s*)?(?:inst|system|sys)\s*\]|<<\s*(?:\/\s*)?sys\s*>>|^[ \t>#*\-\u2022]*(?:system|assistant)\**[ \t]*:/m;
 
 // Format characters, Hangul fillers (letters that render as nothing) and control characters other
-// than tabs and line breaks are removed, so they cannot split a word: "ign" + U+3164 + "ore".
+// than tab, line feed, vertical tab, form feed and carriage return: "ign" + U+3164 + "ore".
 const INVISIBLE_CHARACTERS =
-  /[\p{Cf}\u115F\u1160\u3164\uFFA0\u0000-\u0008\u000E-\u001F\u007F-\u0084\u0086-\u009F]/gu;
+  /[\p{Cf}\u115F\u1160\u3164\uFFA0\u0000-\u0008\u000E-\u001F\u007F-\u009F]/gu;
 
 // Vertical tab, form feed and next line end a line, but JavaScript's "^" does not see them as line starts.
 const LINE_SEPARATORS = /[\u000B\u000C\u0085]/g;
 
 // Invisible characters, compatibility forms, case, accents and lookalike letters from other scripts
 // never hide a phrase: a zero-width space inside a word, "aprobación" and a Cyrillic i read the same
-// as plain Latin text. Invisible characters become the given replacement: nothing or a space.
+// as plain Latin text. Invisible characters become the given replacement: nothing or a space. Only
+// with spaces do the line separators start a new line; removed, U+0085 cannot split a word.
 function foldText(text: string, invisibleAs: "" | " "): string {
+  const normalized = text.normalize("NFKC");
+  const lines = invisibleAs === " " ? normalized.replace(LINE_SEPARATORS, "\n") : normalized;
   return replaceLookalikeLetters(
-    text
-      .normalize("NFKC")
-      .replace(LINE_SEPARATORS, "\n")
+    lines
       .replace(INVISIBLE_CHARACTERS, invisibleAs)
       .toLowerCase()
       .normalize("NFD")
