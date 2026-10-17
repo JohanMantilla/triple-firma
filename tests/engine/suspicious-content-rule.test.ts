@@ -181,6 +181,12 @@ describe("evaluateSuspiciousContentRule (R10)", () => {
       expect(evaluate(invoiceWith({ lineItemsSumMinor, taxMinor })).outcome).toBe("PASS");
     });
 
+    it("says the total matches the line items plus tax when the tax was counted", () => {
+      expect(evaluate(invoiceWith({ lineItemsSumMinor: 210_084, taxMinor: 39_916 })).message).toBe(
+        "R10: no se encontraron instrucciones dirigidas al sistema y el total cuadra con la suma de ítems más impuestos.",
+      );
+    });
+
     it.each([
       ["one cent above", 210_085],
       ["one cent below", 210_083],
@@ -239,7 +245,11 @@ describe("evaluateSuspiciousContentRule (R10)", () => {
     it("does not compare when the amount could not be read, which R1 already escalates", () => {
       const invoice = invoiceWith({ lineItemsSumMinor: 200_000 });
       invoice.extraction.amountMinor = { ...invoice.extraction.amountMinor, value: null };
-      expect(evaluate(invoice).outcome).toBe("PASS");
+      expect(evaluate(invoice)).toMatchObject({
+        outcome: "PASS",
+        message:
+          "R10: no se encontraron instrucciones dirigidas al sistema; el total no se comparó con la suma de ítems porque el monto no se pudo leer.",
+      });
     });
 
     it("does not compare tax alone when there is no itemized breakdown", () => {

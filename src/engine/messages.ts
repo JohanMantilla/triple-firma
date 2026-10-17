@@ -144,10 +144,18 @@ export const MESSAGES = {
   },
 
   suspiciousContent: {
-    passed: (hasLineItems: boolean) =>
-      hasLineItems
-        ? "R10: no se encontraron instrucciones dirigidas al sistema y el total cuadra con la suma de ítems."
-        : "R10: no se encontraron instrucciones dirigidas al sistema; la factura no detalla ítems.",
+    // A passing result says exactly what was checked: the total is never said to match when it was
+    // not compared.
+    passed: {
+      matches:
+        "R10: no se encontraron instrucciones dirigidas al sistema y el total cuadra con la suma de ítems.",
+      matchesWithTax:
+        "R10: no se encontraron instrucciones dirigidas al sistema y el total cuadra con la suma de ítems más impuestos.",
+      amountUnreadable:
+        "R10: no se encontraron instrucciones dirigidas al sistema; el total no se comparó con la suma de ítems porque el monto no se pudo leer.",
+      noLineItems:
+        "R10: no se encontraron instrucciones dirigidas al sistema; la factura no detalla ítems.",
+    },
     readerFlagged: (firstFlag: string, count: number) =>
       `el Lector marcó texto sospechoso: ${quoteUntrusted(firstFlag)}${count > 1 ? ` (${count} en total)` : ""}.`,
     instructionInSource: (match: string) =>

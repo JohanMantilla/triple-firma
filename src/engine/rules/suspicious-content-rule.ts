@@ -64,7 +64,7 @@ export function evaluateSuspiciousContentRule(ctx: RuleContext): RuleResult {
     return {
       ruleId: "R10",
       outcome: "PASS",
-      message: MESSAGES.suspiciousContent.passed(lineItemsSumMinor !== null),
+      message: passedMessage(lineItemsSumMinor, ctx.amountMinor, taxMinor),
       compared,
     };
   }
@@ -74,6 +74,18 @@ export function evaluateSuspiciousContentRule(ctx: RuleContext): RuleResult {
     message: MESSAGES.suspiciousContent.escalated(reasons),
     compared,
   };
+}
+
+// Which total check ran, so a passing result never claims a comparison that did not happen.
+function passedMessage(
+  lineItemsSumMinor: number | null,
+  amountMinor: number | null,
+  taxMinor: number | null,
+): string {
+  const { passed } = MESSAGES.suspiciousContent;
+  if (lineItemsSumMinor === null) return passed.noLineItems;
+  if (amountMinor === null) return passed.amountUnreadable;
+  return taxMinor === null ? passed.matches : passed.matchesWithTax;
 }
 
 // The first instruction found in what was read for a field, raw text first and then its evidence.
