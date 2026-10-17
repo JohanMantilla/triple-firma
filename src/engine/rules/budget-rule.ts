@@ -83,9 +83,11 @@ export function checkBudget(ctx: RuleContext, options: BudgetCheckOptions): Rule
 
 // PAYABLE entries count only in their own period, even one with this invoice's id (counting it is the
 // stricter choice). Pending entries reserve whatever their period: an approved escalation is committed
-// in the period of the approval, the current one or later. The invoice's own pending entry never
-// reserves, because at approval its escalation is already in history. A pending entry without a base
-// amount reserves nothing, because it can never be paid (approval revalidation BLOCKs it).
+// in the period of the approval, the current one or later, so one never resolved keeps reserving.
+// Every pending entry reserves, even one with this invoice's id: re-evaluating an invoice that is
+// already pending escalates it, the stricter choice. At approval nothing is reserved, so its own
+// escalation never blocks it. A pending entry without a base amount reserves nothing, because it can
+// never be paid (approval revalidation BLOCKs it).
 function sumPeriodUsage(ctx: RuleContext, options: BudgetCheckOptions) {
   let committedMinor = 0;
   let reservedMinor = 0;
@@ -95,7 +97,7 @@ function sumPeriodUsage(ctx: RuleContext, options: BudgetCheckOptions) {
       if (entry.period === ctx.period) {
         committedMinor = addMinor(committedMinor, entry.baseAmountMinor);
       }
-    } else if (options.isReservingPending && entry.invoiceId !== ctx.invoice.id) {
+    } else if (options.isReservingPending) {
       reservedMinor = addMinor(reservedMinor, entry.baseAmountMinor);
     }
   }

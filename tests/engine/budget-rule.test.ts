@@ -167,16 +167,11 @@ describe("evaluateBudgetRule (R6)", () => {
       });
     });
 
-    it("never counts the invoice being decided, which is already pending at approval", () => {
-      const self = buildHistoryEntry({
-        invoiceId: "inv-1",
-        amountMinor: 200_000,
-        baseAmountMinor: 200_000,
-        status: "PENDING_APPROVAL",
-      });
-      expect(evaluate(200_000, [...COMMITTED_18_000, self])).toMatchObject({
-        outcome: "PASS",
-        compared: { reservedMinor: 0 },
+    it("reserves a pending entry that shares the invoice's id, which is the stricter choice", () => {
+      const sameId = pending("inv-1", 200_000);
+      expect(evaluate(200_000, [...COMMITTED_18_000, sameId])).toMatchObject({
+        outcome: "ESCALATE",
+        compared: { reservedMinor: 200_000 },
       });
     });
 
@@ -247,6 +242,14 @@ describe("evaluateBudgetRule (R6)", () => {
 
 describe("checkBudget without reserving pending escalations (approval revalidation)", () => {
   const history = [payable("inv-a", 1_600_000), pending("inv-p", 300_000)];
+
+  it("ignores the invoice's own pending escalation, already in history at approval", () => {
+    const ctx = buildContext(200_000, [...COMMITTED_18_000, pending("inv-1", 200_000)]);
+    expect(checkBudget(ctx, { isReservingPending: false })).toMatchObject({
+      outcome: "PASS",
+      compared: { committedMinor: 1_800_000, reservedMinor: 0 },
+    });
+  });
 
   it("lets two pending escalations not block each other", () => {
     const ctx = buildContext(400_000, history);
