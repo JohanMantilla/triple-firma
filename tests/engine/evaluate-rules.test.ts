@@ -44,6 +44,32 @@ describe("evaluateRules", () => {
     ]);
   });
 
+  it("never pays twice an invoice that was already paid when it is decided again", () => {
+    const paid = buildHistoryEntry({
+      invoiceId: "inv-1",
+      fileHash: input.invoice.fileHash,
+      reference: "INV-102",
+      amountMinor: 250_000,
+      baseAmountMinor: 250_000,
+      decidedAt: "2026-10-16T14:00:00Z",
+    });
+    expect(evaluateRules({ ...cleanInput, history: [paid] }).outcome).toBe("BLOCK");
+  });
+
+  it("does not pay the last part of a split payment whose earlier part reused this invoice's id", () => {
+    const part = buildHistoryEntry({
+      invoiceId: "inv-1",
+      fileHash: "c".repeat(64),
+      reference: "INV-090",
+      amountMinor: 100_000,
+      baseAmountMinor: 100_000,
+      decidedAt: "2026-10-16T14:00:00Z",
+    });
+    const decision = evaluateRules({ ...cleanInput, history: [part] });
+    expect(decision.outcome).toBe("ESCALATE");
+    expect(decision.ruleResults.find((result) => result.ruleId === "R7")?.outcome).toBe("ESCALATE");
+  });
+
   it("escalates the fixture invoice over the default threshold, never paying it", () => {
     expect(evaluateRules(input).outcome).toBe("ESCALATE");
   });

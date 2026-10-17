@@ -1,5 +1,6 @@
 import type { RuleResult } from "@/contracts/decision";
 import { type HistoryEntry, isCountedInBudget } from "@/contracts/history";
+import type { Invoice } from "@/contracts/invoice";
 import { normalizePayee } from "@/contracts/payee";
 import { normalizeReference } from "@/contracts/reference";
 import { formatMoney } from "../format-money";
@@ -21,14 +22,18 @@ const STRENGTH: Record<MatchKind, number> = {
   UNREADABLE_REFERENCE: 3,
 };
 
-// R2: the invoice is compared with every past invoice of any period except itself. The same file, or
+// R2: the invoice is compared with every past invoice of any period except its own pending escalation
+// (same id, same file, PENDING_APPROVAL), which is the one being decided. Its own entry once PAYABLE
+// is not skipped: deciding an invoice that was already paid blocks it as the same file, so a retry can
+// never pay it twice. Ids come from outside the engine, so the same id with another file is compared
+// like any other invoice. The same file, or
 // an exact duplicate (same payee, amount, currency and reference) of a payable or pending invoice
 // -> BLOCK. A near duplicate, a match with a rejected or blocked invoice, or a match where a reference
 // could not be read -> ESCALATE: a person decides, and nothing is presented as fraud.
 export function evaluateDuplicateRule(ctx: RuleContext): RuleResult {
   const { invoice, config, history } = ctx;
   const { payee, amountMinor, currency, reference } = invoice.extraction;
-  const others = history.filter((entry) => entry.invoiceId !== invoice.id);
+  const others = history.filter((entry) => !isOwnPendingEntry(entry, invoice));
   const result = (
     outcome: RuleResult["outcome"],
     message: string,
@@ -191,4 +196,13 @@ function hasForeignDigits(normalizedReference: string): boolean {
 // the safe direction: it only applies to the same payee, amount and currency, and only escalates.
 function withoutZeros(normalizedReference: string): string {
   return normalizedReference.replaceAll("0", "");
+}
+
+// The escalation of this same invoice that a person is deciding: it must not count as its own duplicate.
+function isOwnPendingEntry(entry: HistoryEntry, invoice: Invoice): boolean {
+  return (
+    entry.invoiceId === invoice.id &&
+    entry.fileHash === invoice.fileHash &&
+    entry.status === "PENDING_APPROVAL"
+  );
 }
