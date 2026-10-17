@@ -105,7 +105,7 @@ Configuración editable desde la pantalla. **Una regla sin configurar nunca pasa
 | **R8 Moneda** | Moneda desconocida o ambigua (`$` sin país) | ESCALAR | |
 | | Conversión con tasa fija de la configuración: aritmética exacta y un solo redondeo al centavo (ver decisión 3) | — | |
 | **R9 Fechas** | Vencimiento inválido, ya vencido más de X días o a más de Y días en el futuro | ESCALAR | |
-| **R10 Contenido sospechoso** | Instrucciones dirigidas al agente dentro del documento, o el total no cuadra con la suma de ítems | ESCALAR | "El documento contiene instrucciones dirigidas al sistema; se ignoraron." |
+| **R10 Contenido sospechoso** | Instrucciones dirigidas al agente dentro del documento (las que reporta el Lector **y** las que el motor encuentra por su cuenta en `sourceText`, el texto original de correos y chats), o el total no cuadra con la suma de ítems | ESCALAR | "El documento contiene instrucciones dirigidas al sistema; se ignoraron." |
 
 ### Decisiones del paso cero: cerradas por A
 
@@ -386,7 +386,7 @@ Los contratos ya están en `src/contracts/` (uno por concepto, Zod 4) y son la f
 | `dates.ts` | `IsoDateSchema`, `IsoDateTimeSchema`, `PeriodSchema`, `TimezoneSchema` | Fechas guardadas siempre en UTC; periodo `AAAA-MM`; zona horaria IANA válida |
 | `payee.ts` | `normalizePayee`, `PayeeNameSchema` | Una sola forma de comparar nombres (mayúsculas, puntuación, espacios, caracteres invisibles), usada por la configuración y por R3 |
 | `extraction.ts` | `ExtractionSchema` | Cada campo con `raw`, `value`, `evidence` e `isUncertain`; monto positivo (0 o negativo queda incierto y R1 escala) |
-| `invoice.ts` | `InvoiceSchema` | Hash SHA-256 del archivo y formato de origen |
+| `invoice.ts` | `InvoiceSchema` | Hash SHA-256 del archivo, formato de origen y `sourceText` (obligatorio en correos y chats) para que R10 no dependa solo del LLM |
 | `rules-config.ts` | `RulesConfigSchema`, `AgreementSchema` | Todos los campos obligatorios; la moneda base con tasa 1; tope mayor que el umbral; nadie permitido y bloqueado a la vez; sin acuerdos solapados para un mismo beneficiario |
 | `history.ts` | `HistoryEntrySchema`, `isCountedInBudget` | Guarda tasa, `baseAmountMinor` y `period` de cada pago o escalada pendiente; conserva rechazadas y frenadas para R2 |
 | `decision.ts` | `DecisionSchema`, `RuleResultSchema`, `combineRuleOutcomes` | R1 a R10 evaluadas exactamente una vez; la decisión es la más restrictiva; PAGAR siempre registra monto, moneda, monto en USD y tasa |
