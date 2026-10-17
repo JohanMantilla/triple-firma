@@ -100,6 +100,8 @@ export const MESSAGES = {
   duplicate: {
     sameFile: (invoiceId: string) =>
       `R2: este mismo archivo ya se procesó como la factura ${invoiceId}.`,
+    alreadyPending: (invoiceId: string) =>
+      `R2: esta factura ya está pendiente de aprobación como ${invoiceId}; la decide una persona.`,
     unreadable: (labels: string) =>
       `R2: no se puede verificar si es duplicada porque no se pudo leer con certeza: ${labels}.`,
     // payee arrives already quoted by the rule; references are quoted here.

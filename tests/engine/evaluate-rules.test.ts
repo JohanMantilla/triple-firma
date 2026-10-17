@@ -82,6 +82,24 @@ describe("evaluateRules", () => {
     expect(evaluateRules({ ...cleanInput, history: [pendingPart] }).outcome).toBe("ESCALATE");
   });
 
+  it("does not pay an invoice reprocessed while its escalation is still pending", () => {
+    const ownPending = buildHistoryEntry({
+      invoiceId: "inv-1",
+      fileHash: input.invoice.fileHash,
+      reference: "INV-102",
+      status: "PENDING_APPROVAL",
+      amountMinor: 250_000,
+      baseAmountMinor: 250_000,
+      decidedAt: "2026-10-01T14:00:00Z",
+    });
+    const config = buildRulesConfig({ approvalThresholdMinor: 600_000 });
+    const decision = evaluateRules({ ...input, config, history: [ownPending] });
+    expect(decision.outcome).toBe("ESCALATE");
+    expect(decision.ruleResults.filter((result) => result.outcome !== "PASS")).toMatchObject([
+      { ruleId: "R2", compared: { matchType: "OWN_PENDING" } },
+    ]);
+  });
+
   it("escalates the fixture invoice over the default threshold, never paying it", () => {
     expect(evaluateRules(input).outcome).toBe("ESCALATE");
   });
