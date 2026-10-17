@@ -13,6 +13,7 @@ import { buildRuleContext, type RuleContext, type RuleContextInput } from "./rul
 import { evaluateCurrencyRule } from "./rules/currency-rule";
 import { evaluateDueDateRule } from "./rules/due-date-rule";
 import { evaluateExtractionRule } from "./rules/extraction-rule";
+import { evaluatePayeeRule } from "./rules/payee-rule";
 import { evaluatePaymentLimitRule } from "./rules/payment-limit-rule";
 
 export type RuleEvaluator = (ctx: RuleContext) => RuleResult;
@@ -22,7 +23,7 @@ export type RuleEvaluator = (ctx: RuleContext) => RuleResult;
 const RULES: Record<RuleId, RuleEvaluator> = {
   R1: evaluateExtractionRule,
   R2: notImplemented("R2"),
-  R3: notImplemented("R3"),
+  R3: evaluatePayeeRule,
   R4: notImplemented("R4"),
   R5: evaluatePaymentLimitRule,
   R6: notImplemented("R6"),
