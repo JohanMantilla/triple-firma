@@ -42,17 +42,22 @@ export function evaluateDuplicateRule(ctx: RuleContext): RuleResult {
     return result("BLOCK", MESSAGES.duplicate.sameFile(sameFile.invoiceId), "SAME_FILE", sameFile);
   }
 
-  const unreadable = [
-    (payee.value === null || payee.isUncertain) && MESSAGES.fieldLabels.payee,
-    (amountMinor.value === null || amountMinor.isUncertain) && MESSAGES.fieldLabels.amountMinor,
-    (currency.value === null || currency.isUncertain) && MESSAGES.fieldLabels.currency,
-  ].filter((label): label is string => typeof label === "string");
-  // payee.value === null is already in `unreadable`; repeating it lets TypeScript narrow payee.value.
-  if (unreadable.length > 0 || payee.value === null) {
-    return result("ESCALATE", MESSAGES.duplicate.unreadable(unreadable.join(", ")), "UNREADABLE");
+  // A missing value leaves nothing to compare. An uncertain one is still compared with history, so a
+  // copy of a paid invoice is reported (or blocked) instead of hidden behind "could not be read".
+  const labelsOf = (isProblem: (field: { value: unknown; isUncertain: boolean }) => boolean) =>
+    [
+      isProblem(payee) && MESSAGES.fieldLabels.payee,
+      isProblem(amountMinor) && MESSAGES.fieldLabels.amountMinor,
+      isProblem(currency) && MESSAGES.fieldLabels.currency,
+    ].filter((label): label is string => typeof label === "string");
+  if (payee.value === null || amountMinor.value === null || currency.value === null) {
+    const missing = labelsOf((field) => field.value === null).join(", ");
+    return result("ESCALATE", MESSAGES.duplicate.unreadable(missing), "UNREADABLE");
   }
+  const uncertain = labelsOf((field) => field.isUncertain);
 
-  const invoiceReference = reference.isUncertain ? null : reference.value;
+  const invoiceReference = reference.value;
+  const isReferenceCertain = !reference.isUncertain;
   const invoicePayee = normalizePayee(payee.value);
   const matches = others
     .map((entry) => {
@@ -60,7 +65,9 @@ export function evaluateDuplicateRule(ctx: RuleContext): RuleResult {
       // A past invoice whose amount or currency could not be read (kept so a resubmitted copy is
       // caught) is compared on payee and reference only; it can never be proven identical.
       if (entry.amountMinor === null || entry.currency === null) {
-        const byReference = isSamePayee ? classify(entry, invoiceReference) : null;
+        const byReference = isSamePayee
+          ? classify(entry, invoiceReference, isReferenceCertain)
+          : null;
         const isReferenceMatch =
           byReference !== null && byReference.kind !== "UNREADABLE_REFERENCE";
         return isReferenceMatch ? { entry, kind: "UNREADABLE_AMOUNT" as const } : null;
@@ -68,7 +75,7 @@ export function evaluateDuplicateRule(ctx: RuleContext): RuleResult {
       const isSameMoney =
         entry.amountMinor === amountMinor.value && entry.currency === currency.value;
       return (isSamePayee || entry.payee === null) && isSameMoney
-        ? classify(entry, invoiceReference)
+        ? classify(entry, invoiceReference, isReferenceCertain)
         : null;
     })
     .filter((match): match is Match => match !== null);
@@ -119,7 +126,7 @@ export function evaluateDuplicateRule(ctx: RuleContext): RuleResult {
         "ESCALATE",
         MESSAGES.duplicate.unreadableReference(
           payee.value,
-          formatMoney(amountMinor.value ?? 0, currency.value ?? ""),
+          formatMoney(amountMinor.value, currency.value),
         ),
         "UNREADABLE_REFERENCE",
         entry,
@@ -133,18 +140,28 @@ export function evaluateDuplicateRule(ctx: RuleContext): RuleResult {
     );
   }
 
+  if (uncertain.length > 0) {
+    return result("ESCALATE", MESSAGES.duplicate.unreadable(uncertain.join(", ")), "UNREADABLE");
+  }
   return result("PASS", MESSAGES.duplicate.none, "NONE");
 }
 
 // Same payee, amount and currency are already known; the reference decides how close the match is.
-// A missing payee or reference on either side cannot rule a duplicate out, so it needs review.
-function classify(entry: HistoryEntry, invoiceReference: string | null): Match | null {
+// A missing payee or reference on either side cannot rule a duplicate out, so it needs review. An
+// uncertain reference still blocks an exact copy, but any other reference of the same payee and
+// amount needs review, since the reading itself may be wrong.
+function classify(
+  entry: HistoryEntry,
+  invoiceReference: string | null,
+  isReferenceCertain: boolean,
+): Match | null {
   if (entry.reference === null || invoiceReference === null) {
     return { entry, kind: "UNREADABLE_REFERENCE" };
   }
   const past = normalizeReference(entry.reference);
   const current = normalizeReference(invoiceReference);
   if (past === current) return { entry, kind: entry.payee === null ? "NEAR" : "EXACT" };
+  if (!isReferenceCertain) return { entry, kind: "UNREADABLE_REFERENCE" };
   const isNear =
     isWithinOneEdit(past, current) ||
     isOneSwapApart(past, current) ||

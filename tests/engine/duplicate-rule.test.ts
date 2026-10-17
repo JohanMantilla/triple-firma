@@ -238,12 +238,43 @@ describe("evaluateDuplicateRule (R2)", () => {
     });
   });
 
-  it("escalates when the current invoice's reference is uncertain", () => {
+  it("escalates when the current invoice's reference is uncertain and another reference exists", () => {
     const uncertain = (invoice: Invoice) => {
       invoice.extraction.reference = { ...invoice.extraction.reference, isUncertain: true };
     };
     expect(evaluate([past({ reference: "INV-999" })], uncertain).compared).toMatchObject({
       matchType: "UNREADABLE_REFERENCE",
+    });
+  });
+
+  it("blocks an exact copy of a paid invoice even if the current reference is uncertain", () => {
+    const uncertain = (invoice: Invoice) => {
+      invoice.extraction.reference = { ...invoice.extraction.reference, isUncertain: true };
+    };
+    expect(evaluate([past({ reference: "INV-102" })], uncertain).outcome).toBe("BLOCK");
+  });
+
+  it.each(["payee", "amountMinor", "currency"] as const)(
+    "blocks an exact copy of a paid invoice even if the current %s is uncertain",
+    (field) => {
+      const uncertain = (invoice: Invoice) => {
+        const extraction = invoice.extraction as Record<string, unknown>;
+        extraction[field] = { ...(extraction[field] as object), isUncertain: true };
+      };
+      expect(evaluate([past({ reference: "INV-102" })], uncertain)).toMatchObject({
+        outcome: "BLOCK",
+        compared: { matchType: "EXACT", matchedInvoiceId: "inv-0" },
+      });
+    },
+  );
+
+  it("names the past invoice when an uncertain field still matches a near copy", () => {
+    const uncertain = (invoice: Invoice) => {
+      invoice.extraction.payee = { ...invoice.extraction.payee, isUncertain: true };
+    };
+    expect(evaluate([past({ reference: "INV-103" })], uncertain).compared).toMatchObject({
+      matchType: "NEAR",
+      matchedInvoiceId: "inv-0",
     });
   });
 
@@ -271,7 +302,23 @@ describe("evaluateDuplicateRule (R2)", () => {
     ["payee", "Beneficiario"],
     ["amountMinor", "Monto"],
     ["currency", "Moneda"],
-  ] as const)("escalates when the %s cannot be read", (field, label) => {
+  ] as const)("escalates when the %s is missing, without comparing", (field, label) => {
+    const missing = (invoice: Invoice) => {
+      const extraction = invoice.extraction as Record<string, unknown>;
+      extraction[field] = { ...(extraction[field] as object), value: null };
+    };
+    expect(evaluate([past({ reference: "INV-102" })], missing)).toMatchObject({
+      outcome: "ESCALATE",
+      compared: { matchType: "UNREADABLE" },
+      message: `R2: no se puede verificar si es duplicada porque no se pudo leer con certeza: ${label}.`,
+    });
+  });
+
+  it.each([
+    ["payee", "Beneficiario"],
+    ["amountMinor", "Monto"],
+    ["currency", "Moneda"],
+  ] as const)("escalates an uncertain %s even when nothing in history matches", (field, label) => {
     const uncertain = (invoice: Invoice) => {
       const extraction = invoice.extraction as Record<string, unknown>;
       extraction[field] = { ...(extraction[field] as object), isUncertain: true };
