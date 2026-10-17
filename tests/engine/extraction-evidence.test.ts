@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isAmountSupported,
   isCurrencySupported,
-  isDueDateSupported,
+  isDateSupported,
   isPayeeSupported,
   isReferenceSupported,
 } from "@/engine/rules/extraction-evidence";
@@ -110,7 +110,7 @@ describe("isCurrencySupported", () => {
   });
 });
 
-describe("isDueDateSupported", () => {
+describe("isDateSupported", () => {
   it.each([
     ["2026-10-30", "Due: Oct 30, 2026"],
     ["2026-10-30", "Vence: 30/10/2026"],
@@ -121,7 +121,7 @@ describe("isDueDateSupported", () => {
     ["2026-09-15", "Vence el 15 de setiembre de 2026"],
     ["2026-12-01", "Due Dec. 1, 2026"],
   ])("supports %s with %j", (isoDate, evidence) => {
-    expect(isDueDateSupported(isoDate, evidence)).toBe(true);
+    expect(isDateSupported(isoDate, evidence)).toBe(true);
   });
 
   it.each([
@@ -133,6 +133,6 @@ describe("isDueDateSupported", () => {
     ["2026-09-30", "Vence 30 2026, pago separado"],
     ["2026-03-30", "Vence 30 2026, marca registrada"],
   ])("does not support %s with %j", (isoDate, evidence) => {
-    expect(isDueDateSupported(isoDate, evidence)).toBe(false);
+    expect(isDateSupported(isoDate, evidence)).toBe(false);
   });
 });

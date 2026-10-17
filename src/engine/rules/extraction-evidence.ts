@@ -90,9 +90,10 @@ const MONTH_NAMES: readonly (readonly string[])[] = [
   ["dec", "december", "dic", "diciembre"],
 ];
 
-// The year (4 digits), day and month of the ISO due date must all appear in the evidence; the month
-// may be a number or an English or Spanish name ("Oct 30, 2026", "30/10/2026", "30 de octubre de 2026").
-export function isDueDateSupported(isoDate: string, evidence: string): boolean {
+// The year (4 digits), day and month of an ISO date (due date or issue date) must all appear in the
+// evidence; the month may be a number or an English or Spanish name ("Oct 30, 2026", "30/10/2026",
+// "30 de octubre de 2026").
+export function isDateSupported(isoDate: string, evidence: string): boolean {
   const [year, month, day] = isoDate.split("-");
   const text = normalizeForSearch(evidence);
   const numbers = text.match(/\d+/g) ?? [];

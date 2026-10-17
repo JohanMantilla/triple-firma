@@ -5,7 +5,7 @@ import type { RuleContext } from "../rule-context";
 import {
   isAmountSupported,
   isCurrencySupported,
-  isDueDateSupported,
+  isDateSupported,
   isPayeeSupported,
   isReferenceSupported,
   normalizeForSearch,
@@ -96,7 +96,7 @@ function isValueSupported(extraction: Extraction, field: RequiredField, evidence
       );
     case "dueDate":
       return (
-        extraction.dueDate.value !== null && isDueDateSupported(extraction.dueDate.value, evidence)
+        extraction.dueDate.value !== null && isDateSupported(extraction.dueDate.value, evidence)
       );
   }
 }
