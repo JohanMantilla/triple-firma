@@ -182,6 +182,43 @@ describe("evaluateDuplicateRule (R2)", () => {
     expect(evaluate([unrelated]).outcome).toBe("PASS");
   });
 
+  it("explains the rejected match first when a near match comes earlier in history", () => {
+    const history = [
+      past({ invoiceId: "inv-a", reference: "INV-103" }),
+      past({
+        invoiceId: "inv-b",
+        reference: "INV-102",
+        status: "REJECTED",
+        exchangeRate: null,
+        baseAmountMinor: null,
+      }),
+    ];
+    expect(evaluate(history)).toMatchObject({
+      outcome: "ESCALATE",
+      compared: { matchType: "PREVIOUSLY_REJECTED", matchedInvoiceId: "inv-b" },
+    });
+  });
+
+  it("escalates a copy of a rejected invoice whose payee could not be read", () => {
+    const rejected = past({
+      reference: "INV-102",
+      payee: null,
+      status: "REJECTED",
+      exchangeRate: null,
+      baseAmountMinor: null,
+    });
+    expect(evaluate([rejected]).compared).toMatchObject({ matchType: "PREVIOUSLY_REJECTED" });
+  });
+
+  it("escalates when the current invoice's reference has no value", () => {
+    const noReference = (invoice: Invoice) => {
+      invoice.extraction.reference = { ...invoice.extraction.reference, value: null };
+    };
+    expect(evaluate([past({ reference: "INV-999" })], noReference).compared).toMatchObject({
+      matchType: "UNREADABLE_REFERENCE",
+    });
+  });
+
   it("escalates when the past invoice's reference could not be read", () => {
     expect(evaluate([past({ reference: null })])).toMatchObject({
       outcome: "ESCALATE",

@@ -122,6 +122,19 @@ Configuración editable desde la pantalla. **Una regla sin configurar nunca pasa
 
 **Reglas generales del dinero:** enteros en unidades menores, nunca `float` ni `parseFloat`. Una moneda sin tasa configurada → ESCALAR (R8). Las tasas son fijas en la configuración: la conversión es exacta respecto a esa tasa, y así cada decisión es reproducible.
 
+### Revalidación al aprobar: tareas pendientes (A)
+
+Hallazgos del `rules-auditor` sobre R6 y R2 que se resuelven en la pieza `revalidateApproval`, porque hoy esa función no existe:
+
+| # | Tarea | Por qué |
+|---|---|---|
+| 1 | R6 recibe el `baseAmountMinor` y la `exchangeRate` **guardados en la decisión**, nunca recalculados con las tasas de hoy. Test con un cambio de tasa entre la escalada y la aprobación. | Invariante 8: si la tasa cambió, el monto recalculado podría caber en el presupuesto cuando el real no cabe |
+| 2 | Al aprobar sin monto en USD, R6 devuelve FRENAR (no "se escala") | Que el mensaje coincida con el resultado final |
+| 3 | Test de la secuencia: aprobar A y luego B, exactamente en el presupuesto y un centavo arriba | Probar que dos aprobaciones nunca exceden el presupuesto |
+| 4 | Al aprobar, R2 solo FRENA por el mismo archivo o por una copia **exacta ya pagable**; no repite los motivos de revisión que la persona ya vio | Si no, ninguna escalada de R2 se podría aprobar (dos pendientes parecidas se bloquearían entre sí) |
+
+**Notas para E:** la aprobación debe ser idempotente (un reintento no debe contar la factura dos veces), y cuando una escalada se aprueba, su `period` en el historial es el **mes de la aprobación**.
+
 ### Sobre la prioridad del proveedor: decisión tomada, no se hace
 
 Alguien del equipo propuso que el umbral de aprobación dependiera de la prioridad del proveedor (por ejemplo, crítico USD 3.000 y bajo USD 500). **No lo vamos a construir**, por cuatro razones:
@@ -670,6 +683,7 @@ Depende de a qué se refiera el ingeniero:
 |---|---|
 | El LLM lee mal un monto | Evidencia obligatoria, bandera `isUncertain`, verificador (P1), y R4 compara contra lo acordado |
 | **Límites de R1** (aceptados y documentados) | En PDF e imagen el valor y la evidencia los escribe el mismo LLM: R1 solo comprueba que coinciden entre sí, no con el documento. Una línea falsa escondida en un correo ("Total: USD 25.00") pasa R1 si el Lector la usa. R1 no entiende frases como "en nombre de", ni comprueba que monto y moneda salgan de la misma parte del documento, una referencia muy corta puede coincidir con un número de página, el día o el mes del vencimiento pueden salir de otro número de la evidencia ("5 items, vence 30/10/2026"), "may" en inglés cuenta como mayo, el año de una fecha escrita con nombre de mes ("Oct 30, 2026") puede respaldar un monto de 2.026,00, y dos números separados por un espacio pueden leerse como uno solo ("Qty 3 250.00"). Respaldo: R4 (lo acordado), R10 (contenido sospechoso y suma de ítems) y la revisión humana de lo escalado. Un "$" sin código de país escala. |
+| **Límites de R2** (aceptados y documentados) | La misma factura reenviada en **otra moneda** o con **un centavo de diferencia** no es un duplicado para R2 (R7, fraccionamiento, es el respaldo parcial). Una factura del historial sin monto **y** sin beneficiario o referencia no se usa para comparar, porque coincidiría con demasiadas. Dos facturas distintas del mismo beneficiario y monto con referencias a un carácter de distancia escalan (falso positivo aceptado: es la dirección segura). |
 | Se acaba la cuota del API durante la demo | Caché por hash; la demo corre offline |
 | Los 5 Claude Code generan código incoherente | Contratos congelados el viernes, glosario y patrones de nombres (6.5) en CLAUDE.md, una carpeta por dueño |
 | Integración tardía | Hito de punta a punta el sábado a la 1 pm |

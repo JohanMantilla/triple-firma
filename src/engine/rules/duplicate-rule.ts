@@ -92,7 +92,8 @@ export function evaluateDuplicateRule(ctx: RuleContext): RuleResult {
     );
   }
 
-  const review = matches[0];
+  // A match with a rejected or blocked invoice explains best why a person must look again.
+  const review = matches.find(({ entry }) => !isCountedInBudget(entry.status)) ?? matches[0];
   if (review !== undefined) {
     const { entry, kind } = review;
     const date = toLocalDate(entry.decidedAt, config.timezone);
