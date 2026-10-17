@@ -53,6 +53,10 @@ describe("isAmountSupported", () => {
     [150_000, "Total 1.500"],
     [250, "Total 2.5"],
     [250_000, "Subtotal 2,000.00 IVA 500.00 Total 2,500.00"],
+    [250_000, "Total 2 500,00"],
+    [250_000, "Total\u00A02\u202F500,00 COP"],
+    [250_000, "Total: USD2,500.00"],
+    [250_000, "Total 2,500.00 vence 30/10/2026"],
   ])("supports %i with %j", (amountMinor, evidence) => {
     expect(isAmountSupported(amountMinor, evidence)).toBe(true);
   });
@@ -63,6 +67,15 @@ describe("isAmountSupported", () => {
     [2_500, "Total: USD 2,500.00"],
     [250_000, "Total: USD dos mil quinientos"],
     [150, "Total 1.500"],
+    [250_000, "Total: -2,500.00"],
+    [250_000, "Total: - 2,500.00"],
+    [250_000, "Saldo a favor (2,500.00)"],
+    [250_000, "Total \u22122,500.00"],
+    [250_000, "Total \u20132,500.00"],
+    [3_000, "Total 25,000.00 vence 30/10/2026"],
+    [1_900, "Total 25,000.00 IVA 19%"],
+    [10_200, "Factura INV-102 por 25,000.00"],
+    [25_000, "Total 2 50"],
   ])("does not support %i with %j", (amountMinor, evidence) => {
     expect(isAmountSupported(amountMinor, evidence)).toBe(false);
   });

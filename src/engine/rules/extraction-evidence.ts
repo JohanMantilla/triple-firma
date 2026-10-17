@@ -34,11 +34,31 @@ export function isReferenceSupported(value: string, evidence: string): boolean {
 
 // Some number in the evidence must be worth exactly amountMinor. A separator followed by 1 or 2
 // digits is the decimal mark ("2.500,00", "2,500.00", "2.5"); otherwise separators group thousands
-// ("2,500", "1.500"). Whole numbers are compared, so "2500" never matches inside "250000".
+// ("2,500", "1.500", "2 500,00"). Whole numbers are compared, so "2500" never matches inside "250000".
+// Numbers that cannot be a positive amount to pay are ignored: negative or in parentheses
+// ("-2,500.00", "(2,500.00)") and parts of dates, percentages or codes ("30/10/2026", "19%", "INV-102").
 export function isAmountSupported(amountMinor: number, evidence: string): boolean {
   const target = BigInt(amountMinor);
-  const numbers = evidence.normalize("NFKC").match(/\d[\d.,]*\d|\d/g) ?? [];
-  return numbers.some((number) => toMinorUnits(number) === target);
+  const text = evidence.normalize("NFKC");
+  for (const match of text.matchAll(AMOUNT_PATTERN)) {
+    const start = match.index;
+    const end = start + match[0].length;
+    if (isSignedOrPartOfOtherNumber(text, start, end)) continue;
+    if (toMinorUnits(match[0]) === target) return true;
+  }
+  return false;
+}
+
+// Digits with "." or "," inside, or a space followed by exactly three digits (thousands grouping).
+const AMOUNT_PATTERN = /\d(?:[\d.,]| (?=\d{3}(?!\d)))*\d|\d/g;
+
+function isSignedOrPartOfOtherNumber(text: string, start: number, end: number): boolean {
+  const before = text.slice(0, start).trimEnd().at(-1) ?? "";
+  const touchingBefore = text[start - 1] ?? "";
+  const touchingAfter = text[end] ?? "";
+  const isSigned = /^[\p{Pd}\u2212(]$/u.test(before);
+  const isPartOfDateOrCode = touchingBefore === "/" || /^[\/%\p{Pd}]$/u.test(touchingAfter);
+  return isSigned || isPartOfDateOrCode;
 }
 
 // The ISO code of the currency must appear as a word ("USD 2,500.00"); "US$" also means USD. A bare
@@ -98,7 +118,7 @@ function toMinorUnits(number: string): bigint {
   const fraction = lastSeparator === -1 ? "" : number.slice(lastSeparator + 1);
   const hasDecimals = fraction.length === 1 || fraction.length === 2;
   const integerDigits = (hasDecimals ? number.slice(0, lastSeparator) : number).replace(
-    /[.,]/g,
+    /[., ]/g,
     "",
   );
   const cents = hasDecimals ? fraction.padEnd(2, "0") : "00";

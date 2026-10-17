@@ -98,6 +98,22 @@ describe("evaluateExtractionRule (R1)", () => {
     });
   });
 
+  it("escalates an amount whose only evidence is negative, so a credit note is never paid", () => {
+    const invoice = withField("amountMinor", { evidence: "Total: USD -2,500.00" });
+    expect(evaluate(invoice)).toMatchObject({
+      outcome: "ESCALATE",
+      compared: { valueNotSupported: "amountMinor" },
+    });
+  });
+
+  it("escalates an amount supported only by a date in its evidence", () => {
+    const invoice = withField("amountMinor", {
+      value: 3_000,
+      evidence: "Total USD 25,000.00 vence 30/10/2026",
+    });
+    expect(evaluate(invoice).outcome).toBe("ESCALATE");
+  });
+
   it("escalates a reference that only partially matches its evidence", () => {
     const invoice = withField("reference", { value: "INV-10" });
     expect(evaluate(invoice)).toMatchObject({
