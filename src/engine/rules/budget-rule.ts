@@ -10,8 +10,8 @@ export type BudgetCheckOptions = {
   isReservingPending: boolean;
 };
 
-// R6: the payment must fit in the monthly budget of the current period. PAYABLE entries are committed;
-// PENDING_APPROVAL entries with a known base amount are reserved. Over the committed budget the payment
+// R6: the payment must fit in the monthly budget of the current period. PAYABLE entries of the period
+// are committed; PENDING_APPROVAL entries with a known base amount are reserved. Over the committed budget the payment
 // is blocked; fitting only without the reservations, a person must choose. "Exceeds" is strictly greater.
 export function evaluateBudgetRule(ctx: RuleContext): RuleResult {
   return checkBudget(ctx, { isReservingPending: true });
@@ -54,7 +54,14 @@ export function checkBudget(ctx: RuleContext, options: BudgetCheckOptions): Rule
     return {
       ruleId: "R6",
       outcome: "ESCALATE",
-      message: MESSAGES.budget.overWithReserved(money(reservedMinor), periodName),
+      message: MESSAGES.budget.overWithReserved(
+        periodName,
+        money(committedMinor),
+        money(reservedMinor),
+        money(baseAmountMinor),
+        money(totalMinor),
+        money(monthlyBudgetMinor),
+      ),
       compared,
     };
   }
@@ -74,18 +81,21 @@ export function checkBudget(ctx: RuleContext, options: BudgetCheckOptions): Rule
   };
 }
 
-// Only entries of the current period count, and never the invoice being decided: at approval its own
-// escalation is already in history as PENDING_APPROVAL. A pending entry without a base amount reserves
-// nothing, because it can never be paid (R6 escalates it here and BLOCKs it at approval).
+// PAYABLE entries count only in their own period, even one with this invoice's id (counting it is the
+// stricter choice). Pending entries reserve whatever their period: an approved escalation is committed
+// in the period of the approval, the current one or later. The invoice's own pending entry never
+// reserves, because at approval its escalation is already in history. A pending entry without a base
+// amount reserves nothing, because it can never be paid (approval revalidation BLOCKs it).
 function sumPeriodUsage(ctx: RuleContext, options: BudgetCheckOptions) {
   let committedMinor = 0;
   let reservedMinor = 0;
   for (const entry of ctx.history) {
-    if (entry.period !== ctx.period || entry.invoiceId === ctx.invoice.id) continue;
     if (!isCountedInBudget(entry.status) || entry.baseAmountMinor === null) continue;
     if (entry.status === "PAYABLE") {
-      committedMinor = addMinor(committedMinor, entry.baseAmountMinor);
-    } else if (options.isReservingPending) {
+      if (entry.period === ctx.period) {
+        committedMinor = addMinor(committedMinor, entry.baseAmountMinor);
+      }
+    } else if (options.isReservingPending && entry.invoiceId !== ctx.invoice.id) {
       reservedMinor = addMinor(reservedMinor, entry.baseAmountMinor);
     }
   }

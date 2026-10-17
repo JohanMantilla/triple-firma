@@ -26,13 +26,38 @@ function payable(invoiceId: string, baseAmountMinor: number, period = "2026-10")
   });
 }
 
-function pending(invoiceId: string, baseAmountMinor: number) {
+function pending(invoiceId: string, baseAmountMinor: number, period = "2026-10") {
   return buildHistoryEntry({
     invoiceId,
     amountMinor: baseAmountMinor,
     baseAmountMinor,
     status: "PENDING_APPROVAL",
+    period,
   });
+}
+
+type ExtractionEdit = {
+  currency?: string;
+  isAmountUncertain?: boolean;
+  isCurrencyUncertain?: boolean;
+};
+
+// An invoice of amountMinor in the given currency, against USD 18,000.00 already committed.
+function evaluateWith(amountMinor: number, edit: ExtractionEdit, config = buildRulesConfig()) {
+  const invoice = buildInvoice();
+  const { extraction } = invoice;
+  extraction.amountMinor = {
+    ...extraction.amountMinor,
+    value: amountMinor,
+    isUncertain: edit.isAmountUncertain ?? false,
+  };
+  extraction.currency = {
+    ...extraction.currency,
+    value: edit.currency ?? "USD",
+    isUncertain: edit.isCurrencyUncertain ?? false,
+  };
+  const history = [payable("inv-a", 1_000_000), payable("inv-b", 800_000)];
+  return evaluateBudgetRule(buildRuleContext({ invoice, config, history, now: NOW }));
 }
 
 const COMMITTED_18_000 = [payable("inv-a", 1_000_000), payable("inv-b", 800_000)];
@@ -82,7 +107,7 @@ describe("evaluateBudgetRule (R6)", () => {
       expect(evaluate(200_001, history)).toMatchObject({
         outcome: "ESCALATE",
         message:
-          "R6: con USD 2.000,00 reservados por escaladas pendientes, este pago excedería el presupuesto de octubre de 2026; requiere revisión humana.",
+          "R6: presupuesto de octubre de 2026: USD 16.000,00 comprometidos + USD 2.000,00 reservados por escaladas pendientes + este pago (USD 2.000,01) = USD 20.000,01, excede USD 20.000,00; requiere revisión humana.",
         compared: { committedMinor: 1_600_000, reservedMinor: 200_000 },
       });
     });
@@ -104,10 +129,18 @@ describe("evaluateBudgetRule (R6)", () => {
         compared: { committedMinor: 1_700_000, reservedMinor: 250_000 },
       });
     });
+
+    it("reserves for a pending escalation from an earlier period, which would be committed now", () => {
+      const step0 = [payable("inv-a", 1_700_000), pending("inv-p", 250_000, "2026-09")];
+      expect(evaluate(150_000, step0)).toMatchObject({
+        outcome: "ESCALATE",
+        compared: { reservedMinor: 250_000 },
+      });
+    });
   });
 
   describe("what counts", () => {
-    it("ignores entries from another period", () => {
+    it("ignores payable entries from another period", () => {
       expect(evaluate(200_000, [payable("inv-a", 1_900_000, "2026-09")]).outcome).toBe("PASS");
     });
 
@@ -147,6 +180,18 @@ describe("evaluateBudgetRule (R6)", () => {
       });
     });
 
+    it("still counts a payable entry that shares the invoice's id", () => {
+      const sameId = payable("inv-1", 1_900_000);
+      expect(evaluate(200_000, [sameId])).toMatchObject({
+        outcome: "BLOCK",
+        compared: { committedMinor: 1_900_000 },
+      });
+    });
+
+    it("blocks any payment when the committed amount already exceeds the budget", () => {
+      expect(evaluate(1, [payable("inv-a", 2_000_001)]).outcome).toBe("BLOCK");
+    });
+
     it("uses the period in the configured time zone: Nov 1 03:00 UTC is still October in New York", () => {
       const result = evaluate(200_001, COMMITTED_18_000, "2026-11-01T03:00:00Z");
       expect(result).toMatchObject({ outcome: "BLOCK", compared: { period: "2026-10" } });
@@ -163,6 +208,34 @@ describe("evaluateBudgetRule (R6)", () => {
       message:
         "R6: no se pudo calcular el monto en USD para compararlo con el presupuesto; se escala por seguridad.",
       compared: { baseAmountMinor: null },
+    });
+  });
+
+  it.each([
+    ["an uncertain amount", { isAmountUncertain: true }],
+    ["an uncertain currency", { isCurrencyUncertain: true }],
+    ["an unsupported currency", { currency: "EUR" }],
+  ])("escalates %s, which has no base amount", (_case, edit) => {
+    expect(evaluateWith(100_000, edit)).toMatchObject({
+      outcome: "ESCALATE",
+      compared: { baseAmountMinor: null },
+    });
+  });
+
+  it("escalates a supported currency without a configured rate", () => {
+    const config = buildRulesConfig({ exchangeRates: { USD: "1" } });
+    expect(evaluateWith(100_000, { currency: "COP" }, config).outcome).toBe("ESCALATE");
+  });
+
+  // COP at 4000 per USD, rounded half up once: the converted amount is what meets the budget.
+  it.each([
+    ["COP 7.999.999,99 → USD 2.000,00", 799_999_999, "PASS", 200_000],
+    ["COP 8.000.019,99 → USD 2.000,00", 800_001_999, "PASS", 200_000],
+    ["COP 8.000.020,00 → USD 2.000,01 (half up)", 800_002_000, "BLOCK", 200_001],
+  ])("compares the converted amount: %s", (_case, amountMinor, outcome, baseAmountMinor) => {
+    expect(evaluateWith(amountMinor, { currency: "COP" })).toMatchObject({
+      outcome,
+      compared: { baseAmountMinor },
     });
   });
 
@@ -184,9 +257,13 @@ describe("checkBudget without reserving pending escalations (approval revalidati
     });
   });
 
-  it("still blocks one cent above the committed budget", () => {
-    const ctx = buildContext(400_001, history);
-    expect(checkBudget(ctx, { isReservingPending: false }).outcome).toBe("BLOCK");
+  it.each([
+    ["one cent below the committed budget", 399_999, "PASS"],
+    ["exactly the committed budget", 400_000, "PASS"],
+    ["one cent above the committed budget", 400_001, "BLOCK"],
+  ])("compares %s", (_case, amountMinor, outcome) => {
+    const ctx = buildContext(amountMinor, history);
+    expect(checkBudget(ctx, { isReservingPending: false }).outcome).toBe(outcome);
   });
 });
 

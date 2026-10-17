@@ -103,8 +103,15 @@ export const MESSAGES = {
       `R6: no se pudo calcular el monto en ${baseCurrency} para compararlo con el presupuesto; se escala por seguridad.`,
     overBudget: (period: string, committed: string, budget: string, amount: string) =>
       `R6: presupuesto de ${period}: ${committed} comprometidos de ${budget}; este pago (${amount}) lo excede.`,
-    overWithReserved: (reserved: string, period: string) =>
-      `R6: con ${reserved} reservados por escaladas pendientes, este pago excedería el presupuesto de ${period}; requiere revisión humana.`,
+    overWithReserved: (
+      period: string,
+      committed: string,
+      reserved: string,
+      amount: string,
+      total: string,
+      budget: string,
+    ) =>
+      `R6: presupuesto de ${period}: ${committed} comprometidos + ${reserved} reservados por escaladas pendientes + este pago (${amount}) = ${total}, excede ${budget}; requiere revisión humana.`,
     withinBudget: (
       period: string,
       committed: string,

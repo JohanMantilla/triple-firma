@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { RULE_IDS } from "@/contracts/decision";
 import { evaluateRules, evaluateRulesWith, type RuleEvaluator } from "@/engine/evaluate-rules";
+import { evaluateBudgetRule } from "@/engine/rules/budget-rule";
 import { buildHistoryEntry, buildInvoice, buildRulesConfig, NOW, stubRules } from "./fixtures";
 
 const input = {
@@ -201,5 +202,33 @@ describe("evaluateRulesWith", () => {
     expect(() =>
       evaluateRulesWith({ ...input, now: "2026-10-17T10:00:00-04:00" }, stubRules()),
     ).toThrow();
+  });
+});
+
+describe("evaluateRulesWith the real R6", () => {
+  // The fixture invoice is USD 2,500.00 against a USD 20,000.00 budget; every other rule passes.
+  const rules = { ...stubRules(), R6: evaluateBudgetRule };
+  const withHistory = (history: ReturnType<typeof buildHistoryEntry>[]) => ({ ...input, history });
+
+  it("blocks the decision when R6 blocks", () => {
+    const history = [buildHistoryEntry({ amountMinor: 1_800_000, baseAmountMinor: 1_800_000 })];
+    expect(evaluateRulesWith(withHistory(history), rules).outcome).toBe("BLOCK");
+  });
+
+  it("escalates the decision when only the reservations exceed the budget", () => {
+    const history = [
+      buildHistoryEntry({ amountMinor: 1_700_000, baseAmountMinor: 1_700_000 }),
+      buildHistoryEntry({
+        invoiceId: "inv-p",
+        amountMinor: 100_000,
+        baseAmountMinor: 100_000,
+        status: "PENDING_APPROVAL",
+      }),
+    ];
+    expect(evaluateRulesWith(withHistory(history), rules).outcome).toBe("ESCALATE");
+  });
+
+  it("pays when the payment fits the budget", () => {
+    expect(evaluateRulesWith(withHistory([buildHistoryEntry()]), rules).outcome).toBe("PAY");
   });
 });
