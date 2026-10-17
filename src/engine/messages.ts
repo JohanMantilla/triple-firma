@@ -7,6 +7,8 @@ export const MESSAGES = {
   escalatedPrefix: "Escalada:",
   blockedPrefix: "Frenada:",
   ruleFailed: (ruleId: RuleId) => `${ruleId}: la regla no pudo evaluarse; se escala por seguridad.`,
+  ruleFailedOnApproval: (ruleId: RuleId) =>
+    `${ruleId}: la regla no pudo revalidarse al aprobar; no se paga por seguridad.`,
 
   fieldLabels: {
     payee: "Beneficiario",
