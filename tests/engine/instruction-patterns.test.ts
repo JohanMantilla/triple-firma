@@ -119,6 +119,7 @@ describe("findInstruction", () => {
     ["No se aceptan devoluciones sin aprobación previa"],
     ["Cambios sin previa aprobación generan recargo"],
     ["Access to the AI platform, October"],
+    ["Attention: AI Department"],
     ["Consultoría en tecnologías como IA y analítica"],
     ["Our consultant will act as the system integrator"],
     ["Don't forget to check our new catalog"],

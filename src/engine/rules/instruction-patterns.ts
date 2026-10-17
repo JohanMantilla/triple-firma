@@ -78,7 +78,7 @@ const WORD_PATTERNS: readonly (readonly [InstructionPatternId, RegExp])[] = [
       "(?:new|updated) instructions?",
       "developer mode",
       "jailbreak",
-      "(?:dear|attention|hey|hello|hi|note to the) (?:ai|llm|chatbot|ai assistant|ai agent)",
+      "(?:dear|hey|hello|hi|note to the) (?:ai|llm|chatbot|ai assistant|ai agent)",
       "eres (?:un |una |el |la )?(?:ia|inteligencia artificial|asistente|agente|modelo|bot|chatbot|sistema)",
       "actua como (?:un |una |el |la )?(?:ia|asistente|aprobador|administrador|sistema)",
       "nuevas? instrucciones?",
