@@ -143,7 +143,7 @@ describe("normalizeExtraction", () => {
     expect(extraction.dueDate.value).toBe("2026-10-30");
     expect(extraction.payee.value).toBe("Dev Partners SAS");
     expect(extraction.reference.value).toBe("INV-102");
-    expect(extraction.lineItemsSumMinor).toBe(250000);
+    expect(extraction.lineItemAmountsMinor).toEqual([100000, 150000]);
   });
 
   it("parses from the verbatim raw text, ignoring the reader's own value", () => {
@@ -233,25 +233,26 @@ describe("normalizeExtraction", () => {
     expect(extraction.reference.isUncertain).toBe(true);
   });
 
-  it("returns a null lineItemsSumMinor when there is no breakdown", () => {
+  it("returns no item amounts when there is no breakdown", () => {
     const extraction = normalizeExtraction({ ...READER_RESPONSE, lineItemAmountStrings: [] });
-    expect(extraction.lineItemsSumMinor).toBeNull();
+    expect(extraction.lineItemAmountsMinor).toBeNull();
   });
 
-  it("adds the printed items in code when no subtotal is printed", () => {
+  it("copies each printed item and never sums them", () => {
     const extraction = normalizeExtraction({
       ...READER_RESPONSE,
       lineItemAmountStrings: ["COP 800.000,00", "COP 200.000,00"],
     });
-    expect(extraction.lineItemsSumMinor).toBe(100000000);
+    expect(extraction.lineItemAmountsMinor).toEqual([80000000, 20000000]);
+    expect(extraction.lineItemsSumMinor).toBeNull();
   });
 
-  it("leaves the sum unknown when one item cannot be read", () => {
+  it("keeps an unreadable item as null in its place", () => {
     const extraction = normalizeExtraction({
       ...READER_RESPONSE,
       lineItemAmountStrings: ["USD 1,000.00", "n/a"],
     });
-    expect(extraction.lineItemsSumMinor).toBeNull();
+    expect(extraction.lineItemAmountsMinor).toEqual([100000, null]);
   });
 
   it("passes suspicious text through untouched", () => {
