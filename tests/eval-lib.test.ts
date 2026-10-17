@@ -1,18 +1,40 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { evaluate, isExplained, loadExpected, normalizeDecision, parseCsv } from "../scripts/eval-lib";
+import {
+  evaluate,
+  isExplained,
+  loadExpected,
+  normalizeDecision,
+  parseCsv,
+} from "../scripts/eval-lib";
 import type { DecisionRecord } from "../scripts/eval-lib";
 
 const expectedCsv = readFileSync(join(__dirname, "../data/expected.csv"), "utf8");
 const expected = loadExpected(expectedCsv);
 
-const good = (file: string, decision: "PAY" | "BLOCK" | "ESCALATE", rules: string[] = []): DecisionRecord => ({
+const good = (
+  file: string,
+  decision: "PAY" | "BLOCK" | "ESCALATE",
+  rules: string[] = [],
+): DecisionRecord => ({
   file,
   decision,
   results: rules.length
-    ? rules.map((rule) => ({ rule, outcome: decision === "BLOCK" ? "BLOCK" : "ESCALATE", message: "Motivo explicado con valores.", compared: { monto: 1 } }))
-    : [{ rule: "R1", outcome: "PASS", message: "Todo cumple la configuración.", compared: { ok: 1 } }],
+    ? rules.map((rule) => ({
+        rule,
+        outcome: decision === "BLOCK" ? "BLOCK" : "ESCALATE",
+        message: "Motivo explicado con valores.",
+        compared: { monto: 1 },
+      }))
+    : [
+        {
+          rule: "R1",
+          outcome: "PASS",
+          message: "Todo cumple la configuración.",
+          compared: { ok: 1 },
+        },
+      ],
   explanation: "Explicación de ejemplo suficientemente larga.",
 });
 
@@ -21,7 +43,10 @@ const perfect = (): DecisionRecord[] => expected.map((e) => good(e.file, OUT[e.d
 
 describe("parseCsv", () => {
   it("respeta comillas, comas y saltos de línea dentro de celdas", () => {
-    expect(parseCsv('a,b\n"x, y","l1\nl2"\n')).toEqual([["a", "b"], ["x, y", "l1\nl2"]]);
+    expect(parseCsv('a,b\n"x, y","l1\nl2"\n')).toEqual([
+      ["a", "b"],
+      ["x, y", "l1\nl2"],
+    ]);
     expect(parseCsv('a\n"di ""hola"""\n')).toEqual([["a"], ['di "hola"']]);
   });
 });
@@ -41,10 +66,15 @@ describe("expected.csv real", () => {
     expect(expected).toHaveLength(36);
     expect(expected.filter((e) => e.partition === "dev")).toHaveLength(20);
     expect(expected.filter((e) => e.partition === "adversarial")).toHaveLength(16);
-    expect(expected.filter((e) => e.partition === "adversarial" && e.decision === "PAGAR").map((e) => e.file)).toEqual(["adversarial/adv-10.pdf"]);
+    expect(
+      expected
+        .filter((e) => e.partition === "adversarial" && e.decision === "PAGAR")
+        .map((e) => e.file),
+    ).toEqual(["adversarial/adv-10.pdf"]);
   });
   it("toda fila no-PAGAR declara al menos una regla", () => {
-    for (const e of expected) if (e.decision !== "PAGAR") expect(e.rules.length, e.file).toBeGreaterThan(0);
+    for (const e of expected)
+      if (e.decision !== "PAGAR") expect(e.rules.length, e.file).toBeGreaterThan(0);
   });
 });
 
@@ -114,6 +144,11 @@ describe("isExplained", () => {
     expect(isExplained(undefined, null)).toBe(false);
   });
   it("un PAGAR sin ninguna regla evaluada no está explicado", () => {
-    expect(isExplained({ file: "x", decision: "PAY", explanation: "Se paga porque sí, sin más." }, "PAGAR")).toBe(false);
+    expect(
+      isExplained(
+        { file: "x", decision: "PAY", explanation: "Se paga porque sí, sin más." },
+        "PAGAR",
+      ),
+    ).toBe(false);
   });
 });

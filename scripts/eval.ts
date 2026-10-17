@@ -74,13 +74,16 @@ async function main() {
         .map((s) => s.trim())
         .filter(Boolean)
         .map((s) => {
-          if (!(PARTITIONS as readonly string[]).includes(s)) fail(`Partición desconocida "${s}". Usa: ${PARTITIONS.join(", ")}`);
+          if (!(PARTITIONS as readonly string[]).includes(s))
+            fail(`Partición desconocida "${s}". Usa: ${PARTITIONS.join(", ")}`);
           return s as Partition;
         });
 
   const isHoldout = partitions.includes("holdout");
   if (isHoldout) {
-    console.log("\n🔒 CORRIDA SOBRE HOLDOUT. Esta es la medición final: no se ajusta nada contra estos resultados.");
+    console.log(
+      "\n🔒 CORRIDA SOBRE HOLDOUT. Esta es la medición final: no se ajusta nada contra estos resultados.",
+    );
   }
 
   // ---- expected -----------------------------------------------------------
@@ -113,7 +116,8 @@ async function main() {
     if (!existsSync(p)) fail(`No encuentro el archivo de decisiones ${p}`);
     const raw = JSON.parse(readFileSync(p, "utf8"));
     records = Array.isArray(raw) ? raw : raw.decisions;
-    if (!Array.isArray(records)) fail(`${p} debe ser un arreglo de decisiones o { "decisions": [...] }`);
+    if (!Array.isArray(records))
+      fail(`${p} debe ser un arreglo de decisiones o { "decisions": [...] }`);
     source = `archivo ${p}`;
   } else {
     const runnerPath = resolve(String(args["runner"] ?? "src/pipeline/runBatch.ts"));
@@ -149,7 +153,10 @@ async function main() {
 
   // ---- evaluación ---------------------------------------------------------
   const result = evaluate(selected, records);
-  if (result.duplicates.length) console.warn(`⚠ Decisiones duplicadas para: ${result.duplicates.join(", ")} (se usó la primera)`);
+  if (result.duplicates.length)
+    console.warn(
+      `⚠ Decisiones duplicadas para: ${result.duplicates.join(", ")} (se usó la primera)`,
+    );
 
   const perPartition: Record<string, ReturnType<typeof computeMetrics>> = {};
   for (const p of partitions) {
@@ -158,11 +165,17 @@ async function main() {
     console.log(renderConsoleSummary(`Partición ${p}`, perPartition[p]));
     console.log(renderRowsTable(rows));
     if (args["verbose"]) {
-      for (const r of rows.filter((x) => !x.correct)) console.log(`    ↳ ${r.file}: ${r.explanation || "(sin explicación)"}\n      esperado porque: ${r.justification}`);
+      for (const r of rows.filter((x) => !x.correct))
+        console.log(
+          `    ↳ ${r.file}: ${r.explanation || "(sin explicación)"}\n      esperado porque: ${r.justification}`,
+        );
     }
   }
   if (partitions.length > 1) console.log(renderConsoleSummary("TOTAL", result.metrics));
-  if (result.extras.length) console.warn(`\n⚠ Decisiones para archivos que no están en expected.csv (ignoradas): ${result.extras.join(", ")}`);
+  if (result.extras.length)
+    console.warn(
+      `\n⚠ Decisiones para archivos que no están en expected.csv (ignoradas): ${result.extras.join(", ")}`,
+    );
 
   // ---- reportes -----------------------------------------------------------
   if (!args["no-report"]) {
@@ -171,16 +184,33 @@ async function main() {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     const tag = isHoldout ? "holdout" : partitions.join("+");
     const title = isHoldout ? "HOLDOUT (corrida final)" : partitions.join(" + ");
-    const md = renderMarkdown({ title, generatedAt: new Date().toISOString(), partitions, result, perPartition, source });
+    const md = renderMarkdown({
+      title,
+      generatedAt: new Date().toISOString(),
+      partitions,
+      result,
+      perPartition,
+      source,
+    });
     const base = join(outDir, `eval-${tag}-${stamp}`);
     writeFileSync(`${base}.md`, md, "utf8");
-    writeFileSync(`${base}.json`, JSON.stringify({ partitions, source, metrics: result.metrics, perPartition, rows: result.rows }, null, 2), "utf8");
+    writeFileSync(
+      `${base}.json`,
+      JSON.stringify(
+        { partitions, source, metrics: result.metrics, perPartition, rows: result.rows },
+        null,
+        2,
+      ),
+      "utf8",
+    );
     writeFileSync(join(outDir, `latest-${isHoldout ? "holdout" : "dev"}.md`), md, "utf8");
     console.log(`\n📄 Reporte: ${base}.md`);
   }
 
   if (result.metrics.leaks > 0) {
-    console.error(`\n🚨 ${result.metrics.leaks} FUGA(S): el sistema pagó algo que no debía. Arréglalo antes que cualquier otra cosa.`);
+    console.error(
+      `\n🚨 ${result.metrics.leaks} FUGA(S): el sistema pagó algo que no debía. Arréglalo antes que cualquier otra cosa.`,
+    );
     process.exit(1);
   }
   console.log("\n✅ Cero fugas.");
