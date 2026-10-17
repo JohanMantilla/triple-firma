@@ -89,7 +89,8 @@ Configuración editable desde la pantalla. **Una regla sin configurar nunca pasa
 |---|---|---|---|
 | **R1 Extracción completa** | Falta un campo obligatorio, hay un campo con `isUncertain` o sin evidencia; la evidencia **no respalda el valor** (el beneficiario y la referencia deben aparecer como palabras completas, el monto como un número positivo exacto que no sea parte de una fecha, porcentaje o código, la moneda como código ISO y el vencimiento con su año, mes y día); o, en correos y chats, la evidencia no aparece en el texto original | ESCALAR | "No se pudo leer con certeza el monto." / "La evidencia no respalda el valor leído de: Beneficiario." |
 | **R2 Duplicado** | Exacto: mismo beneficiario (`normalizePayee`), monto, moneda y referencia (`normalizeReference`, que ignora mayúsculas, espacios, guiones, barras y puntos) ya pagada o pendiente | FRENAR | "Ya se pagó la factura FAC-102 de Café Andino (COP 4.500.000) el 03/10." |
-| | Casi duplicado: mismo beneficiario, monto y moneda, y la referencia normalizada está **a un carácter de distancia** (cambiado, agregado o quitado: "FAC-102" vs "FAC-103" o "FAC-102A") o es **igual al quitar los ceros a la izquierda** de sus números ("FAC-102" vs "FAC-00102") | ESCALAR | "Posible duplicado de FAC-102, requiere revisión." |
+| | Si el beneficiario, el monto, la moneda o la referencia de la factura nueva se leyeron pero están **inciertos**, igual se comparan con el historial: una copia exacta de una pagada o pendiente se **frena** (dirección estricta: un valor mal leído que coincide exactamente con una pagada no se aprueba con un clic), y sin coincidencias se escala | FRENAR / ESCALAR | |
+| | Casi duplicado: mismo beneficiario, monto y moneda, y la referencia normalizada está **a un carácter de distancia** (cambiado, agregado o quitado: "FAC-102" vs "FAC-103" o "FAC-102A") dos caracteres vecinos están intercambiados ("FAC-120"), o es **igual sin contar los ceros** ("FAC-102" vs "FAC-00102" o "INV-2026-007" vs "INV-2026-7"); una referencia con dígitos que no son 0–9 se trata como ilegible | ESCALAR | "Posible duplicado de FAC-102, requiere revisión." |
 |                                | Coincide con una factura que antes fue **rechazada** por una persona o **frenada** (aunque sea otro archivo)       | ESCALAR | "Esta factura coincide con FAC-102, que fue rechazada el 03/10; requiere revisión." |
 | | Si una factura del historial (o la nueva) tiene beneficiario o referencia ilegible, se compara con los campos que sí se leyeron (beneficiario, monto y moneda); si coinciden, es casi duplicado | ESCALAR | "Posible duplicado de una factura de Dev Partners SAS por USD 1.500 cuya referencia no se pudo leer; requiere revisión." |
 | **R3 Beneficiario** (se evalúa **en este orden**, y la primera condición que se cumple decide) | 1. Coincidencia exacta con un beneficiario **bloqueado** | FRENAR | "Old Vendor LLC está bloqueado por la empresa." |
@@ -121,6 +122,19 @@ Configuración editable desde la pantalla. **Una regla sin configurar nunca pasa
 | — | ¿Umbral distinto según la prioridad del proveedor? | **No en este hackatón.** Umbral único (ver abajo). | — |
 
 **Reglas generales del dinero:** enteros en unidades menores, nunca `float` ni `parseFloat`. Una moneda sin tasa configurada → ESCALAR (R8). Las tasas son fijas en la configuración: la conversión es exacta respecto a esa tasa, y así cada decisión es reproducible.
+
+### Revalidación al aprobar: tareas pendientes (A)
+
+Hallazgos del `rules-auditor` sobre R6 y R2 que se resuelven en la pieza `revalidateApproval`, porque hoy esa función no existe:
+
+| # | Tarea | Por qué |
+|---|---|---|
+| 1 | R6 recibe el `baseAmountMinor` y la `exchangeRate` **guardados en la decisión**, nunca recalculados con las tasas de hoy. Test con un cambio de tasa entre la escalada y la aprobación. | Invariante 8: si la tasa cambió, el monto recalculado podría caber en el presupuesto cuando el real no cabe |
+| 2 | Al aprobar sin monto en USD, R6 devuelve FRENAR (no "se escala") | Que el mensaje coincida con el resultado final |
+| 3 | Test de la secuencia: aprobar A y luego B, exactamente en el presupuesto y un centavo arriba | Probar que dos aprobaciones nunca exceden el presupuesto |
+| 4 | Al aprobar, R2 solo FRENA por el mismo archivo o por una copia **exacta ya pagable**; no repite los motivos de revisión que la persona ya vio | Si no, ninguna escalada de R2 se podría aprobar (dos pendientes parecidas se bloquearían entre sí) |
+
+**Notas para E:** la aprobación debe ser idempotente (un reintento no debe contar la factura dos veces), y cuando una escalada se aprueba, su `period` en el historial es el **mes de la aprobación**.
 
 ### Sobre la prioridad del proveedor: decisión tomada, no se hace
 
@@ -305,7 +319,7 @@ sequenceDiagram
 | `extraction` · B | `verifyExtraction(file, extraction)` (P1) | Segunda lectura independiente; si no coincide en campos críticos, marca incierto. | Sí (Haiku) |
 | `engine` · A | `evaluateRules(invoice, config, history, now)` | Corre R1 a R10, combina por precedencia y devuelve la `Decision` con cada `ruleResult`. | No |
 | `engine` · A | `explainDecision(decision)` | Arma la explicación en español desde las plantillas de `messages.ts`, con los valores comparados. | No |
-| `engine` · A | `revalidateApproval(decision, config, history, now)` | Al aprobar, vuelve a correr R2 y R6 con el historial actual. | No |
+| `engine` · A | `revalidateApproval(decision, config, history, now)` | Al aprobar, revalida con el historial actual: R6 con el monto guardado en la decisión, contando solo lo pagable, y R2 solo para frenar por el mismo archivo o una copia exacta ya pagable (ver "Revalidación al aprobar: tareas pendientes"). | No |
 | `store` · E | `findDecisionByFileHash(fileHash)` | Idempotencia: devuelve la decisión previa o `null`. | No |
 | `store` · E | `listPaymentHistory()` | Facturas pagables y escaladas pendientes de **todos** los periodos, con su tasa y su `baseAmountMinor`. El motor filtra por periodo (R6) o por ventana (R7); R2 necesita todo para frenar duplicados de meses anteriores. | No |
 | `store` · E | `appendAuditEntry(tx, payload)` | Escribe en el registro append-only con hash encadenado, dentro de la transacción. | No |
@@ -670,6 +684,7 @@ Depende de a qué se refiera el ingeniero:
 |---|---|
 | El LLM lee mal un monto | Evidencia obligatoria, bandera `isUncertain`, verificador (P1), y R4 compara contra lo acordado |
 | **Límites de R1** (aceptados y documentados) | En PDF e imagen el valor y la evidencia los escribe el mismo LLM: R1 solo comprueba que coinciden entre sí, no con el documento. Una línea falsa escondida en un correo ("Total: USD 25.00") pasa R1 si el Lector la usa. R1 no entiende frases como "en nombre de", ni comprueba que monto y moneda salgan de la misma parte del documento, una referencia muy corta puede coincidir con un número de página, el día o el mes del vencimiento pueden salir de otro número de la evidencia ("5 items, vence 30/10/2026"), "may" en inglés cuenta como mayo, el año de una fecha escrita con nombre de mes ("Oct 30, 2026") puede respaldar un monto de 2.026,00, y dos números separados por un espacio pueden leerse como uno solo ("Qty 3 250.00"). Respaldo: R4 (lo acordado), R10 (contenido sospechoso y suma de ítems) y la revisión humana de lo escalado. Un "$" sin código de país escala. |
+| **Límites de R2** (aceptados y documentados) | La misma factura reenviada en **otra moneda** o con **un centavo de diferencia** no es un duplicado para R2 (R7, fraccionamiento, es el respaldo parcial). Una factura del historial sin monto **y** sin beneficiario o referencia no se usa para comparar, porque coincidiría con demasiadas; tampoco una con monto pero **sin beneficiario**, cuando falta la referencia de cualquiera de las dos facturas. Dos facturas distintas del mismo beneficiario y monto con referencias a un carácter de distancia escalan (falso positivo aceptado: es la dirección segura). |
 | Se acaba la cuota del API durante la demo | Caché por hash; la demo corre offline |
 | Los 5 Claude Code generan código incoherente | Contratos congelados el viernes, glosario y patrones de nombres (6.5) en CLAUDE.md, una carpeta por dueño |
 | Integración tardía | Hito de punta a punta el sábado a la 1 pm |

@@ -1,4 +1,5 @@
 import { normalizePayee } from "@/contracts/payee";
+import { isWithinOneEdit } from "./edit-distance";
 
 // Cyrillic and Greek letters that look like Latin ones, written as code points so the source has no
 // lookalike characters: [code point, Latin letter].
@@ -44,19 +45,4 @@ export function isNearPayee(a: string, b: string): boolean {
   const looseA = loosePayee(a);
   const looseB = loosePayee(b);
   return looseA !== "" && looseB !== "" && isWithinOneEdit(looseA, looseB);
-}
-
-function isWithinOneEdit(a: string, b: string): boolean {
-  const first = [...a];
-  const second = [...b];
-  if (Math.abs(first.length - second.length) > 1) return false;
-  const [shorter, longer] = first.length <= second.length ? [first, second] : [second, first];
-
-  let index = 0;
-  while (index < shorter.length && shorter[index] === longer[index]) index++;
-  if (index === shorter.length) return true;
-
-  const restOfShorter = shorter.slice(shorter.length === longer.length ? index + 1 : index);
-  const restOfLonger = longer.slice(index + 1);
-  return restOfShorter.join("") === restOfLonger.join("");
 }

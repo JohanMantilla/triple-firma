@@ -98,6 +98,25 @@ export const MESSAGES = {
       `R4: cobra ${charged}, conforme a lo acordado con “${payee}” (${agreed}, tolerancia ${tolerance}).`,
   },
 
+  duplicate: {
+    sameFile: (invoiceId: string) =>
+      `R2: este mismo archivo ya se procesó como la factura ${invoiceId}.`,
+    unreadable: (labels: string) =>
+      `R2: no se puede verificar si es duplicada porque no se pudo leer con certeza: ${labels}.`,
+    // payee arrives already quoted by the rule; references are quoted here.
+    exact: (reference: string | null, payee: string, amount: string, date: string) =>
+      `R2: ya se registró ${invoiceNamed(reference)} de ${payee} por ${amount} el ${date}.`,
+    near: (pastReference: string | null, reference: string | null) =>
+      `R2: posible duplicado de ${invoiceNamed(pastReference)} (esta factura: ${reference === null ? "sin referencia" : quoteUntrusted(reference)}); requiere revisión humana.`,
+    previouslyResolved: (reference: string | null, isRejected: boolean, date: string) =>
+      `R2: coincide con ${invoiceNamed(reference)}, que fue ${isRejected ? "rechazada" : "frenada"} el ${date}; requiere revisión humana.`,
+    unreadableReference: (payee: string, amount: string) =>
+      `R2: posible duplicado de una factura de ${payee} por ${amount}; una de las referencias no se pudo leer; requiere revisión humana.`,
+    unreadableAmount: (reference: string | null, date: string) =>
+      `R2: posible duplicado de ${invoiceNamed(reference)} del ${date}, cuyo monto no se pudo leer; requiere revisión humana.`,
+    none: "R2: no hay facturas anteriores iguales ni parecidas.",
+  },
+
   budget: {
     missingBaseAmount: (baseCurrency: string) =>
       `R6: no se pudo calcular el monto en ${baseCurrency} para compararlo con el presupuesto; se escala por seguridad.`,
@@ -169,4 +188,9 @@ export function quoteUntrusted(text: string): string {
       ? `${characters.slice(0, MAX_QUOTED_LENGTH).join("")}\u2026`
       : clean;
   return `\u201c${short}\u201d`;
+}
+
+// "la factura “INV-102”", or "una factura" when its reference could not be read.
+function invoiceNamed(reference: string | null): string {
+  return reference === null ? "una factura" : `la factura ${quoteUntrusted(reference)}`;
 }
