@@ -465,13 +465,9 @@ describe("evaluateDuplicateRule (R2)", () => {
 });
 
 describe("checkDuplicateOnApproval (R2 at approval)", () => {
-  // The escalation being approved was decided on 2026-10-10; the fixture past invoices on 2026-10-03.
-  const ESCALATED_AT = "2026-10-10T14:00:00Z";
-
   function approve(history: HistoryEntry[]) {
     return checkDuplicateOnApproval(
       buildRuleContext({ invoice: buildInvoice(), config: buildRulesConfig(), history, now: NOW }),
-      ESCALATED_AT,
     );
   }
 
@@ -559,7 +555,6 @@ describe("checkDuplicateOnApproval (R2 at approval)", () => {
       invoice.extraction.payee = { ...invoice.extraction.payee, value: null, isUncertain: true };
       return checkDuplicateOnApproval(
         buildRuleContext({ invoice, config: buildRulesConfig(), history, now: NOW }),
-        ESCALATED_AT,
       );
     }
 
@@ -569,9 +564,9 @@ describe("checkDuplicateOnApproval (R2 at approval)", () => {
         ruleId: "R2",
         outcome: "BLOCK",
         message:
-          "R2: el beneficiario de esta factura no se pudo leer y coincide en referencia, monto y moneda con la factura “inv 102” por USD 2.500,00, registrada como pagable el 2026-10-03; no se puede aprobar.",
+          "R2: la factura “inv 102” por USD 2.500,00 ya se registró como pagable el 2026-10-03; es la misma referencia, así que no se puede aprobar.",
         compared: {
-          matchType: "EXACT_WITHOUT_PAYEE",
+          matchType: "SAME_REFERENCE",
           matchedInvoiceId: "inv-0",
           matchedStatus: "PAYABLE",
           matchedReference: "inv 102",
@@ -603,35 +598,42 @@ describe("checkDuplicateOnApproval (R2 at approval)", () => {
     });
   });
 
-  describe("near copies registered as payable after the escalation", () => {
-    const paidLater = (overrides: Partial<HistoryEntry>) =>
+  describe("the same reference already payable, whenever it was paid", () => {
+    const paid = (overrides: Partial<HistoryEntry>) =>
       past({ invoiceId: "inv-0", decidedAt: "2026-10-12T14:00:00Z", ...overrides });
+    const approveWith = (history: HistoryEntry[], uncertainReference = false) => {
+      const invoice = buildInvoice();
+      invoice.extraction.reference = {
+        ...invoice.extraction.reference,
+        isUncertain: uncertainReference,
+      };
+      return checkDuplicateOnApproval(
+        buildRuleContext({ invoice, config: buildRulesConfig(), history, now: NOW }),
+      );
+    };
 
-    it("blocks a near copy that the approver never saw", () => {
-      expect(approve([itself, paidLater({ reference: "INV-0102" })])).toMatchObject({
+    it.each([
+      ["written with a leading zero", { reference: "INV-0102" }],
+      ["paid before the escalation", { reference: "inv 0102", decidedAt: "2026-10-01T14:00:00Z" }],
+      ["whose payee could not be read", { reference: "INV-102", payee: null }],
+    ])("blocks the same reference %s", (_case, overrides) => {
+      expect(approveWith([itself, paid(overrides)])).toMatchObject({
         outcome: "BLOCK",
-        message:
-          "R2: posible duplicado de la factura “INV-0102”, registrada como pagable el 2026-10-12, después de esta escalada, así que quien aprueba no la vio; no se puede aprobar.",
-        compared: { matchType: "NEAR", matchedInvoiceId: "inv-0", matchedStatus: "PAYABLE" },
+        compared: { matchType: "SAME_REFERENCE", matchedInvoiceId: "inv-0" },
       });
     });
 
-    it("blocks a copy paid later whose payee could not be read", () => {
-      expect(approve([itself, paidLater({ reference: "INV-102", payee: null })])).toMatchObject({
-        outcome: "BLOCK",
-        compared: { matchType: "NEAR" },
-      });
+    it("blocks it even when this invoice's reference was read with doubt", () => {
+      expect(approveWith([itself, paid({ reference: "INV-0102" })], true).outcome).toBe("BLOCK");
     });
 
     it.each([
-      [
-        "the same near copy paid before the escalation, which R2 reported",
-        { reference: "INV-0102", decidedAt: "2026-10-09T14:00:00Z" },
-      ],
-      ["a later payable invoice whose reference could not be read", { reference: null }],
-      ["a later payable invoice with another reference", { reference: "INV-555" }],
-    ])("passes %s", (_case, overrides) => {
-      expect(approve([itself, paidLater(overrides)]).outcome).toBe("PASS");
+      ["a near reference, such as the next monthly fee", { reference: "INV-103" }],
+      ["a reference whose zero is not a leading one", { reference: "INV-1020" }],
+      ["a reference that could not be read", { reference: null }],
+      ["another payee", { reference: "INV-102", payee: "Café Andino SAS" }],
+    ])("leaves %s to the approver", (_case, overrides) => {
+      expect(approveWith([itself, paid(overrides)]).outcome).toBe("PASS");
     });
   });
 

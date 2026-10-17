@@ -118,10 +118,8 @@ export const MESSAGES = {
     unreadableAmount: (reference: string | null, date: string) =>
       `R2: posible duplicado de ${invoiceNamed(reference)} del ${date}, cuyo monto no se pudo leer; requiere revisión humana.`,
     none: "R2: no hay facturas anteriores iguales ni parecidas.",
-    nearPaidAfterEscalation: (reference: string | null, date: string) =>
-      `R2: posible duplicado de ${invoiceNamed(reference)}, registrada como pagable el ${date}, después de esta escalada, así que quien aprueba no la vio; no se puede aprobar.`,
-    paidCopyWithoutPayee: (reference: string | null, amount: string, date: string) =>
-      `R2: el beneficiario de esta factura no se pudo leer y coincide en referencia, monto y moneda con ${invoiceNamed(reference)} por ${amount}, registrada como pagable el ${date}; no se puede aprobar.`,
+    paidSameReference: (reference: string | null, amount: string, date: string) =>
+      `R2: ${invoiceNamed(reference)} por ${amount} ya se registró como pagable el ${date}; es la misma referencia, así que no se puede aprobar.`,
     noneOnApproval:
       "R2 (al aprobar): no hay una factura igual ya pagable ni el mismo archivo ya pagado.",
   },

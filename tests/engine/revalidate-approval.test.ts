@@ -149,14 +149,14 @@ describe("revalidateApproval", () => {
       expect(approval.revalidationResults[0]).toMatchObject({
         ruleId: "R2",
         outcome: "BLOCK",
-        compared: { matchType: "EXACT_WITHOUT_PAYEE", matchedInvoiceId: "inv-0" },
+        compared: { matchType: "SAME_REFERENCE", matchedInvoiceId: "inv-0" },
       });
     });
 
     it.each([
-      ["a near copy with another reference format", { reference: "INV-0102" }],
-      ["a copy whose payee could not be read", { reference: "INV-102", payee: null }],
-    ])("blocks %s paid after this escalation, which the approver never saw", (_case, overrides) => {
+      ["written with a leading zero", { reference: "INV-0102" }],
+      ["whose payee could not be read", { reference: "INV-102", payee: null }],
+    ])("blocks a copy with the same reference %s, paid while it waited", (_case, overrides) => {
       // Escalated on 2026-10-10; the copy was approved and paid on 2026-10-12.
       const paidLater = buildHistoryEntry({
         invoiceId: "inv-0",
@@ -170,9 +170,44 @@ describe("revalidateApproval", () => {
       expect(approval.revalidationResults[0]).toMatchObject({
         ruleId: "R2",
         outcome: "BLOCK",
-        compared: { matchType: "NEAR", matchedInvoiceId: "inv-0" },
+        compared: { matchType: "SAME_REFERENCE", matchedInvoiceId: "inv-0" },
       });
     });
+
+    // FAC-102 (A) and FAC-103 (B), same payee and amount: R2 escalated them as near duplicates.
+    const fee = (id: string, hash: string, reference: string) => {
+      const invoice = buildInvoice({ id, fileHash: hash.repeat(64) });
+      invoice.extraction.reference = {
+        ...invoice.extraction.reference,
+        raw: reference,
+        value: reference,
+        evidence: `Invoice ${reference}`,
+      };
+      return invoice;
+    };
+    const feeA = fee("inv-a", "c", "FAC-102");
+    const feeB = fee("inv-b", "d", "FAC-103");
+    const entryOf = (invoice: Invoice, status: "PAYABLE" | "PENDING_APPROVAL") =>
+      pendingEntry({
+        invoiceId: invoice.id,
+        fileHash: invoice.fileHash,
+        reference: invoice.extraction.reference.value,
+        status,
+        // E records an approved escalation with the date of its approval, after the other escalated.
+        decidedAt: status === "PAYABLE" ? "2026-10-12T14:00:00Z" : "2026-10-10T14:00:00Z",
+      });
+
+    it.each([
+      ["A first, then B", feeA, feeB],
+      ["B first, then A", feeB, feeA],
+    ])(
+      "approves two monthly fees with near references in either order: %s",
+      (_case, first, second) => {
+        const history = [entryOf(first, "PAYABLE"), entryOf(second, "PENDING_APPROVAL")];
+        const decision = buildDecision({ id: `decision-${second.id}`, invoiceId: second.id });
+        expect(resolve({ invoice: second, decision, history }).resultingOutcome).toBe("PAY");
+      },
+    );
 
     it("does not let other pending escalations block it: the approver chooses among them", () => {
       const otherPending = buildHistoryEntry({

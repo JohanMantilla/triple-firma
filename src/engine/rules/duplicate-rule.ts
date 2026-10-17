@@ -50,54 +50,34 @@ export function evaluateDuplicateRule(ctx: RuleContext): RuleResult {
   };
 }
 
-// R2 at approval (invariant 8): only what makes paying wrong is checked again. The same file or an
-// exact copy already PAYABLE blocks, so the same invoice is never paid twice, even when a retry left a
-// second pending escalation of it. Everything a person reviews (near duplicates, matches with rejected
-// or blocked invoices, unreadable fields, other pending escalations they are choosing among) passes,
-// because the approver already saw it. A BLOCKED or REJECTED entry of the same file passes too, so a
-// retry can never make the original escalation impossible to approve.
-//
-// Two exceptions, both matches the approver never saw. A near copy registered as payable after the
-// escalation (escalatedAt) did not exist when R2 reported its matches, so it blocks; one that existed
-// before was in that report. And an unreadable payee: R2 could not compare it when the invoice was
-// escalated. A payable invoice with the same reference, amount and currency
-// blocks it. An unreadable reference stays with the person: payee and amount alone match every fixed
-// monthly fee.
-export function checkDuplicateOnApproval(ctx: RuleContext, escalatedAt: string): RuleResult {
+// R2 at approval (invariant 8): it can only pass or block, so it blocks only what is the same invoice.
+// The same file, or a PAYABLE invoice with the same reference (ignoring format and leading zeros:
+// "FAC-0102" is "FAC-102"), amount and currency, from the same payee or with either payee unreadable,
+// blocks, however uncertain the reading and whenever it was paid, so the same invoice is never paid
+// twice. A near reference ("FAC-102" vs "FAC-103": two fixed monthly fees), matches with rejected or
+// blocked invoices, an unreadable reference and other pending escalations are left to the approver,
+// who saw R2's report. A BLOCKED or REJECTED entry of the same file passes, so a retry never makes the
+// original escalation impossible to approve.
+export function checkDuplicateOnApproval(ctx: RuleContext): RuleResult {
   const payable = ctx.history.filter((entry) => entry.status === "PAYABLE");
   const comparison = compareWithHistory(ctx, payable);
   if (comparison.outcome === "BLOCK") return comparison;
-  const paidSince = payable.filter(
-    (entry) => Date.parse(entry.decidedAt) > Date.parse(escalatedAt),
-  );
-  const unseen = compareWithHistory(ctx, paidSince);
-  if (unseen.compared.matchType === "NEAR") {
-    const entry = paidSince.find(({ invoiceId }) => invoiceId === unseen.compared.matchedInvoiceId);
-    return {
-      ...unseen,
-      outcome: "BLOCK",
-      message: MESSAGES.duplicate.nearPaidAfterEscalation(
-        entry?.reference ?? null,
-        entry === undefined ? "" : toLocalDate(entry.decidedAt, ctx.config.timezone),
-      ),
-    };
-  }
-  const paidCopy = findPaidCopyWithoutPayee(ctx, payable);
-  if (paidCopy !== undefined) {
+  const copy = findPaidSameReference(ctx, payable);
+  if (copy !== undefined) {
     const { amountMinor, currency } = ctx.invoice.extraction;
     return {
       ruleId: "R2",
       outcome: "BLOCK",
-      message: MESSAGES.duplicate.paidCopyWithoutPayee(
-        paidCopy.reference,
+      message: MESSAGES.duplicate.paidSameReference(
+        copy.reference,
         formatMoney(amountMinor.value ?? 0, currency.value ?? ""),
-        toLocalDate(paidCopy.decidedAt, ctx.config.timezone),
+        toLocalDate(copy.decidedAt, ctx.config.timezone),
       ),
       compared: {
-        matchType: "EXACT_WITHOUT_PAYEE",
-        matchedInvoiceId: paidCopy.invoiceId,
-        matchedStatus: paidCopy.status,
-        matchedReference: paidCopy.reference,
+        matchType: "SAME_REFERENCE",
+        matchedInvoiceId: copy.invoiceId,
+        matchedStatus: copy.status,
+        matchedReference: copy.reference,
       },
     };
   }
@@ -114,20 +94,30 @@ export function checkDuplicateOnApproval(ctx: RuleContext, escalatedAt: string):
   };
 }
 
-function findPaidCopyWithoutPayee(
+function findPaidSameReference(
   ctx: RuleContext,
   payable: readonly HistoryEntry[],
 ): HistoryEntry | undefined {
   const { payee, amountMinor, currency, reference } = ctx.invoice.extraction;
-  if (payee.value !== null || reference.value === null) return undefined;
-  const invoiceReference = normalizeReference(reference.value);
+  if (reference.value === null) return undefined;
+  const target = withoutLeadingZeros(normalizeReference(reference.value));
+  const isSamePayee = (entryPayee: string | null) =>
+    entryPayee === null ||
+    payee.value === null ||
+    normalizePayee(entryPayee) === normalizePayee(payee.value);
   return payable.find(
     (entry) =>
       entry.amountMinor === amountMinor.value &&
       entry.currency === currency.value &&
       entry.reference !== null &&
-      normalizeReference(entry.reference) === invoiceReference,
+      isSamePayee(entry.payee) &&
+      withoutLeadingZeros(normalizeReference(entry.reference)) === target,
   );
+}
+
+// Zeros that start a number after a letter: "FAC0102" -> "FAC102". "FAC120" keeps its zero.
+function withoutLeadingZeros(normalizedReference: string): string {
+  return normalizedReference.replace(/(?<!\d)0+(?=\d)/g, "");
 }
 
 function compareWithHistory(ctx: RuleContext, others: readonly HistoryEntry[]): RuleResult {
