@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { HistoryEntrySchema } from "@/contracts/history";
+import { HistoryEntrySchema, isCountedInBudget } from "@/contracts/history";
+import { VALID_HASH } from "./fixtures";
 
 describe("HistoryEntrySchema", () => {
   const entry = {
     invoiceId: "inv-0",
+    fileHash: VALID_HASH,
     payee: "Café Andino SAS",
     reference: "FAC-101",
     amountMinor: 450_000_000,
@@ -18,12 +20,43 @@ describe("HistoryEntrySchema", () => {
     expect(HistoryEntrySchema.safeParse(entry).success).toBe(true);
   });
 
-  it("rejects an entry without the exchange rate used", () => {
-    const { exchangeRate: _omitted, ...withoutRate } = entry;
-    expect(HistoryEntrySchema.safeParse(withoutRate).success).toBe(false);
+  it.each(["PAYABLE", "PENDING_APPROVAL"])(
+    "rejects a %s entry without the exchange rate or base amount",
+    (status) => {
+      expect(HistoryEntrySchema.safeParse({ ...entry, status, exchangeRate: null }).success).toBe(
+        false,
+      );
+      expect(
+        HistoryEntrySchema.safeParse({ ...entry, status, baseAmountMinor: null }).success,
+      ).toBe(false);
+    },
+  );
+
+  it.each(["REJECTED", "BLOCKED"])(
+    "keeps a %s invoice even without base amount, so R2 can catch a resubmission",
+    (status) => {
+      const withoutConversion = { ...entry, status, exchangeRate: null, baseAmountMinor: null };
+      expect(HistoryEntrySchema.safeParse(withoutConversion).success).toBe(true);
+    },
+  );
+
+  it("rejects an entry without the file hash", () => {
+    const { fileHash: _omitted, ...withoutHash } = entry;
+    expect(HistoryEntrySchema.safeParse(withoutHash).success).toBe(false);
   });
 
   it("rejects an unknown status", () => {
     expect(HistoryEntrySchema.safeParse({ ...entry, status: "PAID" }).success).toBe(false);
+  });
+});
+
+describe("isCountedInBudget", () => {
+  it.each([
+    ["PAYABLE", true],
+    ["PENDING_APPROVAL", true],
+    ["REJECTED", false],
+    ["BLOCKED", false],
+  ] as const)("is %s → %s", (status, expected) => {
+    expect(isCountedInBudget(status)).toBe(expected);
   });
 });

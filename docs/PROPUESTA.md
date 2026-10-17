@@ -90,6 +90,7 @@ Configuración editable desde la pantalla. **Una regla sin configurar nunca pasa
 | **R1 Extracción completa** | Falta un campo obligatorio, hay un campo con `isUncertain`, el esquema es inválido o no hay evidencia | ESCALAR | "No se pudo leer con certeza el monto." |
 | **R2 Duplicado** | Exacto: beneficiario + monto + moneda + referencia normalizados ya registrados | FRENAR | "Ya se pagó la factura FAC-102 de Café Andino (COP 4.500.000) el 03/10." |
 | | Casi duplicado (difiere en puntuación, espacios o un carácter) | ESCALAR | "Posible duplicado de FAC-102, requiere revisión." |
+|                                | Coincide con una factura que antes fue **rechazada** por una persona o **frenada** (aunque sea otro archivo)       | ESCALAR | "Esta factura coincide con FAC-102, que fue rechazada el 03/10; requiere revisión." |
 | **R3 Beneficiario** | Coincidencia exacta normalizada | pasa | |
 | | Coincidencia aproximada ("Corp" vs "Corp.", Unicode parecido) | ESCALAR | "El nombre se parece a 'Dev Partners SAS' pero no es idéntico." |
 | | No está en la lista | ESCALAR | "Beneficiario nuevo: no está en la lista permitida." |
@@ -110,7 +111,7 @@ Configuración editable desde la pantalla. **Una regla sin configurar nunca pasa
 
 | # | Decisión | Qué se decidió | Cómo queda en los contratos |
 |---|---|---|---|
-| 1 | ¿Las escaladas pendientes reservan presupuesto? | **Sí** (control de compromisos, como en finanzas). Si lo **pagado o aprobado** más este pago excede el presupuesto → **FRENAR**. Si solo se excede al sumar las **escaladas pendientes** → **ESCALAR**, porque la pendiente aún podría rechazarse. Al aprobar se revalida siempre, así que en ningún orden hay fuga. | El historial incluye las escaladas con estado `PENDING` |
+| 1 | ¿Las escaladas pendientes reservan presupuesto? | **Sí** (control de compromisos, como en finanzas). Si lo **pagado o aprobado** más este pago excede el presupuesto → **FRENAR**. Si solo se excede al sumar las **escaladas pendientes** → **ESCALAR**, porque la pendiente aún podría rechazarse. Al aprobar se revalida siempre, así que en ningún orden hay fuga. | El historial incluye las escaladas con estado `PENDING_APPROVAL` |
 | 2 | ¿Cuántos umbrales tiene R5? | **Dos.** Umbral de aprobación: si el monto es **estrictamente mayor** → ESCALAR (USD 2.000,00 pasa; USD 2.000,01 escala). Tope absoluto **opcional**: si se supera → FRENAR, sin opción de aprobar. En la empresa ficticia el tope está encendido en **USD 10.000**. | `approvalThresholdMinor` y `hardCapMinor` (opcional, `null` = apagado) |
 | 3 | ¿Cómo se convierte la moneda? | **Como en contabilidad:** cada factura se convierte a USD **una sola vez**, con la tasa fija de la configuración, aritmética exacta de enteros (`BigInt`) y **un único redondeo al centavo** (mitad hacia arriba). Ese monto en USD queda registrado junto con la tasa usada, y todas las comparaciones y sumas se hacen en **centavos enteros de USD**. Nunca hay fracciones de centavo que escalen una factura por error, y lo que se compara es exactamente lo que se muestra. | Tasas como **texto decimal** en unidades por 1 USD (`"4000"`, `"18.50"`, `"1"`). Cada decisión y cada entrada del historial guardan `amountMinor`, `currency`, `exchangeRate` y `baseAmountMinor` (USD en centavos). |
 | 4 | Zona horaria del periodo | `America/New_York`, configurable | `timezone` en la configuración |
@@ -395,7 +396,7 @@ Los contratos ya están en `src/contracts/` (uno por concepto, Zod 4) y son la f
 
 Además de las buenas prácticas, **el repo tiene que leerse como si lo hubiera escrito una sola persona**, no como 5 proyectos pegados. Por eso cada concepto tiene **un solo nombre** en todas las capas (contratos, motor, extracción, base de datos, API y UI), y cada tipo de archivo sigue el mismo patrón.
 
-**Glosario obligatorio:** la versión vigente y completa está en `CLAUDE.md` (sección *Glossary*), que es la fuente única. Así el Claude Code de cada persona lo lee siempre actualizado y no hay dos versiones que se contradigan. Incluye los términos del paso cero: `baseAmountMinor`, `exchangeRate`, `approvalThresholdMinor`, `hardCapMinor`, `toleranceMinor`, `timezone`, `blockedPayees` y `history` (con estados `PAYABLE` y `PENDING_APPROVAL`).
+**Glosario obligatorio:** la versión vigente y completa está en `CLAUDE.md` (sección *Glossary*), que es la fuente única. Así el Claude Code de cada persona lo lee siempre actualizado y no hay dos versiones que se contradigan. Incluye los términos del paso cero: `baseAmountMinor`, `exchangeRate`, `approvalThresholdMinor`, `hardCapMinor`, `toleranceMinor`, `timezone`, `blockedPayees` y `history` (con estados `PAYABLE`, `PENDING_APPROVAL`, `REJECTED` y `BLOCKED`).
 
 **Patrones por tipo de elemento:**
 
