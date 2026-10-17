@@ -18,6 +18,11 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   prettier,
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": ["warn", { ignoreRestSiblings: true }],
+    },
+  },
   forbidImports(
     ["src/contracts/**"],
     internalModules("engine", "extraction", "store", "pipeline", "lib", "components", "app"),
