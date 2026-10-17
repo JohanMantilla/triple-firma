@@ -161,21 +161,26 @@ function classify(
   const past = normalizeReference(entry.reference);
   const current = normalizeReference(invoiceReference);
   if (past === current) return { entry, kind: entry.payee === null ? "NEAR" : "EXACT" };
-  if (!isReferenceCertain) return { entry, kind: "UNREADABLE_REFERENCE" };
+  // Digits other than 0-9 (Arabic-Indic, Devanagari...) are not folded by NFKC, so such a reference
+  // cannot be compared reliably: it needs review, like an unreadable one.
+  const hasForeignDigits = (text: string) => /[^0-9]/u.test(text.replace(/[^\p{Nd}]/gu, ""));
+  if (!isReferenceCertain || hasForeignDigits(past) || hasForeignDigits(current)) {
+    return { entry, kind: "UNREADABLE_REFERENCE" };
+  }
   const isNear =
     isWithinOneEdit(past, current) ||
     isOneSwapApart(past, current) ||
-    normalizeReference(stripLeadingZeros(entry.reference)) ===
-      normalizeReference(stripLeadingZeros(invoiceReference));
+    withoutZeros(past) === withoutZeros(current);
   if (isNear) {
     return { entry, kind: "NEAR" };
   }
   return null;
 }
 
-// "FAC-00102" -> "FAC-102", "INV-2026-007" -> "INV-2026-7": leading zeros of every run of digits are
-// dropped. It runs on the reference as written, before normalizeReference joins its digit groups.
-// Full-width digits are folded first (NFKC), so "INV-\uFF10\uFF10\uFF17" loses its zeros too.
-function stripLeadingZeros(reference: string): string {
-  return reference.normalize("NFKC").replace(/(?<!\d)0+(?=\d)/g, "");
+// Compares normalized references ignoring every zero, so padding never hides a copy, however it is
+// written: "FAC-00102" vs "FAC-102", "INV-2026-007" vs "INV-2026-7", zeros split by invisible
+// characters or spaces. Broader than leading zeros only ("FAC-120" vs "FAC-12" also match), which is
+// the safe direction: it only applies to the same payee, amount and currency, and only escalates.
+function withoutZeros(normalizedReference: string): string {
+  return normalizedReference.replaceAll("0", "");
 }

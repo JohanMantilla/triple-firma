@@ -107,6 +107,36 @@ describe("evaluateDuplicateRule (R2)", () => {
     });
   });
 
+  it.each([
+    ["invisible characters between the zeros", "INV-0\u200B0\u200B7"],
+    ["spaces between the zeros", "INV-0 0 7"],
+    ["a space before a padded group", "INV 007"],
+  ])("escalates padding with %s as a near duplicate", (_case, value) => {
+    const padded = (invoice: Invoice) => {
+      invoice.extraction.reference = { ...invoice.extraction.reference, value };
+    };
+    expect(evaluate([past({ reference: "INV-7" })], padded).compared).toMatchObject({
+      matchType: "NEAR",
+    });
+  });
+
+  it("escalates a reference written with Arabic-Indic digits instead of passing it", () => {
+    const arabicIndic = (invoice: Invoice) => {
+      invoice.extraction.reference = {
+        ...invoice.extraction.reference,
+        value: "INV-\u0661\u0660\u0662",
+      };
+    };
+    expect(evaluate([past({ reference: "INV-102" })], arabicIndic)).toMatchObject({
+      outcome: "ESCALATE",
+      compared: { matchType: "UNREADABLE_REFERENCE" },
+    });
+  });
+
+  it("still passes an unrelated reference of the same payee and amount", () => {
+    expect(evaluate([past({ reference: "INV-555" })]).outcome).toBe("PASS");
+  });
+
   it("escalates full-width leading zeros as a near duplicate", () => {
     const fullWidth = (invoice: Invoice) => {
       invoice.extraction.reference = {
