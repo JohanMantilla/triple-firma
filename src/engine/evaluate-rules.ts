@@ -67,7 +67,21 @@ function runRule(ruleId: RuleId, evaluate: RuleEvaluator, ctx: RuleContext): Rul
     if (parsed.success && parsed.data.ruleId === ruleId) return parsed.data;
     return failedRule(ruleId, "invalid rule result");
   } catch (error) {
-    return failedRule(ruleId, error instanceof Error ? error.message : String(error));
+    return failedRule(ruleId, describeError(error));
+  }
+}
+
+const MAX_ERROR_LENGTH = 500;
+
+// Reading the reason must never throw itself: a thrown object may have a throwing toString or message
+// getter, or no prototype at all.
+function describeError(error: unknown): string {
+  try {
+    const reason =
+      error instanceof Error && typeof error.message === "string" ? error.message : String(error);
+    return reason.slice(0, MAX_ERROR_LENGTH);
+  } catch {
+    return "unreadable error";
   }
 }
 

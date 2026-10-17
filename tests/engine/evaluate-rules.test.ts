@@ -53,6 +53,51 @@ describe("evaluateRulesWith", () => {
     expect(r4?.compared).toEqual({ error: "boom" });
   });
 
+  const throwingMessage = new Error("hidden");
+  Object.defineProperty(throwingMessage, "message", {
+    get() {
+      throw new Error("getter");
+    },
+  });
+
+  it.each([
+    ["a string", "plain string", "plain string"],
+    ["an object without prototype", Object.create(null), "unreadable error"],
+    [
+      "an object whose toString throws",
+      {
+        toString() {
+          throw new Error("nope");
+        },
+      },
+      "unreadable error",
+    ],
+    ["an Error whose message getter throws", throwingMessage, "unreadable error"],
+    ["an Error with a very long message", new Error("x".repeat(2_000)), "x".repeat(500)],
+  ])("escalates a rule that throws %s, without the runner throwing", (_case, thrown, reason) => {
+    const rules = stubRules();
+    rules.R4 = () => {
+      throw thrown;
+    };
+    const decision = evaluateRulesWith(input, rules);
+    const r4 = decision.ruleResults.find((result) => result.ruleId === "R4");
+    expect(decision.outcome).toBe("ESCALATE");
+    expect(r4?.compared).toEqual({ error: reason });
+  });
+
+  it.each([
+    [
+      "a Promise",
+      () => Promise.resolve({ ruleId: "R4", outcome: "PASS", message: "ok", compared: {} }),
+    ],
+    ["null", () => null],
+    ["undefined", () => undefined],
+  ])("escalates a rule that returns %s", (_case, evaluator) => {
+    const rules = stubRules();
+    rules.R4 = evaluator as unknown as RuleEvaluator;
+    expect(evaluateRulesWith(input, rules).outcome).toBe("ESCALATE");
+  });
+
   it("escalates a rule that answers for another rule id", () => {
     const rules = stubRules();
     rules.R2 = stubRules().R7;
