@@ -30,13 +30,17 @@ const LATIN_FOR = new Map(
   LOOKALIKE_LETTERS.map(([codePoint, latin]) => [String.fromCodePoint(codePoint), latin]),
 );
 
+// Lowercase Cyrillic and Greek letters that look like Latin ones are read as those Latin letters.
+export function replaceLookalikeLetters(text: string): string {
+  return [...text].map((character) => LATIN_FOR.get(character) ?? character).join("");
+}
+
 // A looser form than normalizePayee, only to detect names that look alike: no accents, lookalike
 // letters from other scripts read as Latin, and no symbols or spaces ("Acmé C-orp" -> "acmecorp").
 export function loosePayee(name: string): string {
-  return [...normalizePayee(name).normalize("NFD").replace(/\p{M}/gu, "")]
-    .map((character) => LATIN_FOR.get(character) ?? character)
-    .join("")
-    .replace(/[^\p{L}\p{N}]/gu, "");
+  return replaceLookalikeLetters(
+    normalizePayee(name).normalize("NFD").replace(/\p{M}/gu, ""),
+  ).replace(/[^\p{L}\p{N}]/gu, "");
 }
 
 // Two names that are not identical look alike when their loose forms are equal or differ in a single
