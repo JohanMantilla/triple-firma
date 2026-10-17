@@ -14,6 +14,14 @@ export function normalizeForSearch(text: string): string {
     .trim();
 }
 
+// In emails and chats the original text is read from the file, not by the LLM, so evidence the reader
+// invented or altered is caught when it is not in that text. Without original text (PDF, image or
+// blank) there is nothing to search and the check passes.
+export function isEvidenceInSource(evidence: string, sourceText: string | null): boolean {
+  if (sourceText === null || sourceText.trim() === "") return true;
+  return normalizeForSearch(sourceText).includes(normalizeForSearch(evidence));
+}
+
 // The payee must appear as whole words: "Acme Corp" is not supported by "Acme Corporation".
 export function isPayeeSupported(value: string, evidence: string): boolean {
   return containsAsWords(normalizePayee(evidence), normalizePayee(value));

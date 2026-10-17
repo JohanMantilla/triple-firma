@@ -4,12 +4,14 @@ import type { Agreement } from "@/contracts/rules-config";
 import { formatMoney } from "../format-money";
 import { MESSAGES } from "../messages";
 import type { RuleContext } from "../rule-context";
-import { isDateSupported } from "./extraction-evidence";
+import { isDateSupported, isEvidenceInSource } from "./extraction-evidence";
 
 // R4: the invoice must match what was agreed with its payee (identical name). As in accounts payable,
 // the agreement must be in force on the invoice's issue date, not on the processing date. Issued
 // outside the agreement, in another currency or for more than agreed (plus tolerance, in the
 // agreement's currency) -> BLOCK. No agreement, an unreadable issue date or less than agreed -> ESCALATE.
+// R1 does not check the issue date, so R4 verifies its evidence itself, including against the
+// original text of emails and chats.
 export function evaluateAgreementRule(ctx: RuleContext): RuleResult {
   const { payee, amountMinor, currency, issueDate } = ctx.invoice.extraction;
   const { agreements, toleranceMinor } = ctx.config;
@@ -46,7 +48,8 @@ export function evaluateAgreementRule(ctx: RuleContext): RuleResult {
     issueDate.value !== null &&
     !issueDate.isUncertain &&
     issueDate.evidence !== null &&
-    isDateSupported(issueDate.value, issueDate.evidence);
+    isDateSupported(issueDate.value, issueDate.evidence) &&
+    isEvidenceInSource(issueDate.evidence, ctx.invoice.sourceText);
   if (!isIssueDateReadable || issueDate.value === null) {
     return result("ESCALATE", MESSAGES.agreement.issueDateUnreadable);
   }

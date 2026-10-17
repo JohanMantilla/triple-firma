@@ -3,6 +3,7 @@ import {
   isAmountSupported,
   isCurrencySupported,
   isDateSupported,
+  isEvidenceInSource,
   isPayeeSupported,
   isReferenceSupported,
 } from "@/engine/rules/extraction-evidence";
@@ -134,5 +135,19 @@ describe("isDateSupported", () => {
     ["2026-03-30", "Vence 30 2026, marca registrada"],
   ])("does not support %s with %j", (isoDate, evidence) => {
     expect(isDateSupported(isoDate, evidence)).toBe(false);
+  });
+});
+
+describe("isEvidenceInSource", () => {
+  it("finds evidence in the original text, ignoring case and spacing", () => {
+    expect(isEvidenceInSource("Date: Oct 1, 2026", "Hola.\nDATE:   oct 1,  2026")).toBe(true);
+  });
+
+  it("does not find evidence that the original text does not contain", () => {
+    expect(isEvidenceInSource("Date: Oct 1, 2026", "Fecha: 15/01/2026")).toBe(false);
+  });
+
+  it.each([null, "", "   "])("passes when there is no original text (%j)", (sourceText) => {
+    expect(isEvidenceInSource("Date: Oct 1, 2026", sourceText)).toBe(true);
   });
 });

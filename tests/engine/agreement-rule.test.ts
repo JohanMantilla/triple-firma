@@ -160,6 +160,27 @@ describe("evaluateAgreementRule (R4)", () => {
     });
   });
 
+  it("escalates an email whose issue date evidence is not in its original text", () => {
+    const email = (invoice: Invoice) => {
+      invoice.sourceFormat = "EMAIL";
+      invoice.sourceText =
+        "Cuenta de cobro de Dev Partners SAS. Fecha: 15/01/2026. Total USD 2,500.00";
+    };
+    expect(evaluate(email)).toMatchObject({
+      outcome: "ESCALATE",
+      message:
+        "R4: no se pudo leer con certeza la fecha de emisión para verificar la vigencia del acuerdo.",
+    });
+  });
+
+  it("passes an email whose issue date evidence is in its original text", () => {
+    const email = (invoice: Invoice) => {
+      invoice.sourceFormat = "EMAIL";
+      invoice.sourceText = "Dev Partners SAS. date:  oct 1, 2026. Total USD 2,500.00";
+    };
+    expect(evaluate(email).outcome).toBe("PASS");
+  });
+
   it("escalates an unreadable issue date", () => {
     const unreadable = (invoice: Invoice) => {
       invoice.extraction.issueDate = { raw: null, value: null, evidence: null, isUncertain: true };
