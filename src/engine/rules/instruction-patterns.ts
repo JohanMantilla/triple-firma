@@ -19,6 +19,7 @@ const upToWordsExcept = (n: number, excluded: readonly string[]) =>
   `(?:(?!(?:${excluded.join("|")}) )[\\p{L}\\p{N}]+ ){0,${n}}?`;
 
 // "Returns are not accepted without prior approval" is an ordinary clause, not an order to the system.
+// After a payment verb the exclusion does not apply: "pay without prior approval" is an order.
 const TERMS_WORDS = ["prior", "previous", "written", "advance", "previa", "previo", "escrita"];
 
 // Whole words only, on text reduced to lowercase words separated by single spaces.
@@ -53,8 +54,9 @@ const WORD_PATTERNS: readonly (readonly [InstructionPatternId, RegExp])[] = [
   [
     "NO_REVIEW",
     wordsPattern([
-      `(?:without|skip|skipping|bypass|bypassing) ${upToWordsExcept(2, TERMS_WORDS)}(?:reviews?|reviewing|approvals?|approving|verifications?|verifying|checks|checking|controls|validations?|escalation|escalating)(?! (?:in advance|in writing|from))`,
+      `(?:without|skip|skipping|bypass|bypassing) ${upToWordsExcept(2, TERMS_WORDS)}(?:reviews?|reviewing|approvals?|approving|verifications?|verifying|checks|checking|controls|validations?|escalation|escalating)(?! (?:in advance|in writing))`,
       `(?:do not|don t|dont|never|no need to) ${upToWords(1)}(?:escalate|flag|block|review|verify|check)`,
+      `(?:pay|release|transfer|wire|pagar|pague|paguen|paga|transferir|transfiera|liberar|libere) ${upToWords(3)}(?:without|sin) ${upToWords(2)}(?:reviews?|reviewing|approvals?|approving|verifications?|checks|checking|controls|validations?|revisar|revision|aprobacion|aprobar|verificar|verificacion|validar|validacion|controles|control)`,
       "(?:does not|doesn t|do not|don t) (?:need|require) (?:any |further |additional )?(?:review|approval|verification|escalation)",
       `(?:no|not) ${upToWords(1)}(?:review|approval|verification|escalation) (?:is )?(?:needed|required|necessary)`,
       `sin ${upToWordsExcept(2, TERMS_WORDS)}(?:revisar|revision|aprobacion|aprobar|verificar|verificacion|validar|validacion|escalar|consultar|controles|control)(?! (?:previa|previo|por escrito))`,
