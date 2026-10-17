@@ -146,9 +146,9 @@ Lista cerrada y determinista en `src/engine/rules/instruction-patterns.ts`, en e
 
 **Notas para B:** (1) agregar al Lector y al Verificador el impuesto impreso como `taxMinor` (copiado, nunca calculado; `null` si no hay); mientras no exista, toda factura con impuestos escala en R10. (2) Una suma de ítems ilegible hoy llega como `null` y R10 no puede distinguirla de "sin desglose". **Nota para C:** en las facturas con desglose, ítems + impuesto debe dar exactamente el total; un descuento o un envío fuera de los ítems escala.
 
-### Revalidación al aprobar: tareas pendientes (A)
+### Revalidación al aprobar
 
-Hallazgos del `rules-auditor` sobre R6 y R2 que se resuelven en la pieza `revalidateApproval`, porque hoy esa función no existe:
+Hallazgos del `rules-auditor` sobre R6 y R2, **resueltos** en `src/engine/revalidate-approval.ts` (con `checkBudget(ctx, { isApproval: true })` y `checkDuplicateOnApproval`) y probados en `tests/engine/revalidate-approval.test.ts`:
 
 | # | Tarea | Por qué |
 |---|---|---|
@@ -156,8 +156,11 @@ Hallazgos del `rules-auditor` sobre R6 y R2 que se resuelven en la pieza `revali
 | 2 | Al aprobar sin monto en USD, R6 devuelve FRENAR (no "se escala") | Que el mensaje coincida con el resultado final |
 | 3 | Test de la secuencia: aprobar A y luego B, exactamente en el presupuesto y un centavo arriba | Probar que dos aprobaciones nunca exceden el presupuesto |
 | 4 | Al aprobar, R2 solo FRENA por el mismo archivo **ya pagable** o por una copia **exacta ya pagable**; omite la escalada que se aprueba (`isOwnPendingEntry` en `duplicate-rule.ts`) y no repite los motivos de revisión que la persona ya vio. Una entrada `BLOCKED` o `REJECTED` con el mismo archivo, que puede dejar un reintento, no debe trabar la aprobación. Se omite solo esa entrada, nunca toda fila con el mismo id. Test obligatorio: dos escaladas pendientes del mismo archivo (un reintento); al aprobar una, aprobar la otra FRENA por mismo archivo ya pagable | Si no, ninguna escalada de R2 se podría aprobar (dos pendientes parecidas se bloquearían entre sí) |
+| 5 | Una escalada **rechazada o ya frenada** no se puede aprobar después (por ejemplo el mes siguiente, con presupuesto nuevo); R2 y R6 deben ver el mismo dinero (el de la decisión coincide con el de la factura); un `baseAmountMinor` guardado que su tasa no da no se acepta | Hallazgos del auditor sobre la primera versión: los tres terminaban en PAGAR |
+| 6 | Al aprobar, R2 solo puede pasar o frenar, así que frena solo **la misma factura**: una ya pagable con la **misma referencia** (sin contar formato ni los ceros que inician un número después de una letra: "FAC-0102" es "FAC-102"), mismo monto y moneda, y el mismo beneficiario o alguno ilegible; sin importar cuándo se pagó ni si la referencia se leyó con duda | Que la misma factura nunca se pague dos veces, aunque la copia se haya pagado mientras la escalada esperaba |
+| 7 | Una referencia **parecida** ("FAC-102" y "FAC-103": dos cuotas mensuales) o ilegible queda en manos de quien aprueba, que vio el aviso de R2 al escalar: se aprueban las dos en cualquier orden. **Límite aceptado:** si una copia parecida se pagó mientras la escalada esperaba, el sistema no la vuelve a mostrar al aprobar; lo mismo con ceros dentro de un número ("INV-2026-007" e "INV-2026-7"), que R2 ya avisó al escalar. **Nota para E:** dos aprobaciones al mismo tiempo no se ven entre sí; leer el historial y guardar la aprobación en una sola transacción, o de a una | Un FRENAR al aprobar es definitivo: frenar lo parecido trabaría para siempre cuotas legítimas |
 
-**Notas para E:** la aprobación debe ser idempotente (un reintento no debe contar la factura dos veces), y cuando una escalada se aprueba, su `period` en el historial es el **mes de la aprobación** y su `decidedAt` es la **fecha de la aprobación** (R7 ubica la ventana por esa fecha). Un id de factura debe ser único por archivo; si no lo es, R2 y R7 igual comparan y suman la entrada, del lado estricto.
+**Notas para E:** `resolveApproval` llama a `revalidateApproval` para aprobar **y** para rechazar, y guarda el `Approval` tal como lo devuelve. Si `resultingOutcome` es PAY, la entrada del historial pasa a `PAYABLE`; si es BLOCK, pasa a `REJECTED` (rechazo) o `BLOCKED` (aprobación frenada por la revalidación). Si la función lanza un error (ver la tabla de módulos), se responde con error y no se guarda nada: así un rechazo es definitivo y una escalada no se resuelve dos veces. `resolveApproval` también debe rechazar una decisión que ya tiene un `Approval` guardado, **con un test**: el motor verifica que la escalada de la factura siga pendiente, no la decisión (el historial no guarda `decisionId`), así que con dos decisiones de la misma factura esta es la única barrera para reaprobar la rechazada. La aprobación debe ser idempotente (un reintento no debe contar la factura dos veces), y cuando una escalada se aprueba, su `period` en el historial es el **mes de la aprobación** y su `decidedAt` es la **fecha de la aprobación** (R7 ubica la ventana por esa fecha). Un id de factura debe ser único por archivo; si no lo es, R2 y R7 igual comparan y suman la entrada, del lado estricto.
 
 ### Sobre la prioridad del proveedor: decisión tomada, no se hace
 
@@ -326,7 +329,7 @@ sequenceDiagram
         A->>UI: Abre la bandeja: Aprobar o Rechazar + comentario
         UI->>P: POST /api/approvals/[decisionId], resolveApproval(...)
         P->>S: Pide historial actualizado del periodo
-        P->>M: revalidateApproval(decision, config, history, now), solo si aprueba
+        P->>M: revalidateApproval({ request, decision, invoice, config, history, now }), rechazar no revalida
         M-->>P: PASS o BLOCK (duplicado o presupuesto)
         P->>S: Transacción: aprobación + appendAuditEntry (quién, cuándo, por qué)
         P-->>UI: Estado final
@@ -342,7 +345,7 @@ sequenceDiagram
 | `extraction` · B | `verifyExtraction(file, extraction)` (P1) | Segunda lectura independiente; si no coincide en campos críticos, marca incierto. | Sí (Haiku) |
 | `engine` · A | `evaluateRules(invoice, config, history, now)` | Corre R1 a R10, combina por precedencia y devuelve la `Decision` con cada `ruleResult`. | No |
 | `engine` · A | `explainDecision(decision)` | Arma la explicación en español desde las plantillas de `messages.ts`, con los valores comparados. | No |
-| `engine` · A | `revalidateApproval(decision, config, history, now)` | Al aprobar, revalida con el historial actual: R6 con el monto guardado en la decisión, contando solo lo pagable, y R2 solo para frenar por el mismo archivo o una copia exacta ya pagable (ver "Revalidación al aprobar: tareas pendientes"). | No |
+| `engine` · A | `revalidateApproval({ request, decision, invoice, config, history, now })` | Resuelve una escalada y devuelve el `Approval` ya validado con `ApprovalSchema`. Rechazar termina en FRENAR sin revalidar. Aprobar revalida con el historial actual: R6 con el monto guardado en la decisión, en el periodo de la aprobación y contando solo lo pagable, y R2 solo para frenar por el mismo archivo o una copia exacta ya pagable (ver "Revalidación al aprobar"). Lanza un error, sin producir nada, si la decisión no es ESCALAR, es de otra factura, ya no está pendiente (rechazada, frenada o aprobada antes), registra otro monto o moneda que la factura, o un `baseAmountMinor` que su propia tasa guardada no da. | No |
 | `store` · E | `findDecisionByFileHash(fileHash)` | Idempotencia: devuelve la decisión previa o `null`. | No |
 | `store` · E | `listPaymentHistory()` | Facturas pagables y escaladas pendientes de **todos** los periodos, con su tasa y su `baseAmountMinor`. El motor filtra por periodo (R6) o por ventana (R7); R2 necesita todo para frenar duplicados de meses anteriores. | No |
 | `store` · E | `appendAuditEntry(tx, payload)` | Escribe en el registro append-only con hash encadenado, dentro de la transacción. | No |
