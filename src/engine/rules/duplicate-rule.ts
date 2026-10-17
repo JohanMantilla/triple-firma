@@ -241,7 +241,7 @@ function withoutZeros(normalizedReference: string): string {
 }
 
 // This invoice's own escalation, still waiting for a person to approve or reject it.
-function isOwnPendingEntry(entry: HistoryEntry, invoice: Invoice): boolean {
+export function isOwnPendingEntry(entry: HistoryEntry, invoice: Invoice): boolean {
   return (
     entry.invoiceId === invoice.id &&
     entry.fileHash === invoice.fileHash &&

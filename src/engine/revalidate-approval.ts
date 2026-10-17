@@ -14,11 +14,12 @@ import {
 import type { HistoryEntry } from "@/contracts/history";
 import type { Invoice } from "@/contracts/invoice";
 import type { RulesConfig } from "@/contracts/rules-config";
+import { convertToBaseMinor } from "./convert-to-base";
 import { describeError } from "./evaluate-rules";
 import { MESSAGES } from "./messages";
 import { buildRuleContext, type RuleContext } from "./rule-context";
 import { checkBudget } from "./rules/budget-rule";
-import { checkDuplicateOnApproval } from "./rules/duplicate-rule";
+import { checkDuplicateOnApproval, isOwnPendingEntry } from "./rules/duplicate-rule";
 
 export type RevalidateApprovalInput = {
   request: ApprovalRequest;
@@ -37,16 +38,8 @@ export type RevalidateApprovalInput = {
 export function revalidateApproval(input: RevalidateApprovalInput): Approval {
   const request = ApprovalRequestSchema.parse(input.request);
   const decision = DecisionSchema.parse(input.decision);
-  if (decision.outcome !== "ESCALATE") {
-    throw new Error(
-      `Only an escalated decision can be resolved; ${decision.id} is ${decision.outcome}`,
-    );
-  }
-  if (decision.invoiceId !== input.invoice.id) {
-    throw new Error(
-      `Decision ${decision.id} belongs to ${decision.invoiceId}, not ${input.invoice.id}`,
-    );
-  }
+  const ctx = buildRuleContext(input);
+  assertResolvable(decision, ctx);
 
   const resolution = {
     ...request,
@@ -55,7 +48,7 @@ export function revalidateApproval(input: RevalidateApprovalInput): Approval {
     currency: decision.currency,
     exchangeRate: decision.exchangeRate,
     baseAmountMinor: decision.baseAmountMinor,
-    resolvedAt: input.now,
+    resolvedAt: ctx.now,
   };
   if (request.action === "REJECT") {
     return ApprovalSchema.parse({
@@ -65,10 +58,10 @@ export function revalidateApproval(input: RevalidateApprovalInput): Approval {
     });
   }
 
-  const ctx = withDecisionMoney(buildRuleContext(input), decision);
+  const approvalCtx = withDecisionMoney(ctx, decision);
   const revalidationResults = [
-    runRevalidation("R2", () => checkDuplicateOnApproval(ctx)),
-    runRevalidation("R6", () => checkBudget(ctx, { isApproval: true })),
+    runRevalidation("R2", () => checkDuplicateOnApproval(approvalCtx)),
+    runRevalidation("R6", () => checkBudget(approvalCtx, { isApproval: true })),
   ];
   const isPaying = revalidationResults.every((result) => result.outcome === "PASS");
   return ApprovalSchema.parse({
@@ -76,6 +69,42 @@ export function revalidateApproval(input: RevalidateApprovalInput): Approval {
     resultingOutcome: isPaying ? "PAY" : "BLOCK",
     revalidationResults,
   });
+}
+
+// Only what still waits for a person, with data that agrees, can be resolved. Anything else is an error
+// of the caller: the function throws, so no approval is produced and E stores nothing.
+function assertResolvable(decision: Decision, ctx: RuleContext): void {
+  const { invoice } = ctx;
+  if (decision.outcome !== "ESCALATE") {
+    throw new Error(
+      `Only an escalated decision can be resolved; ${decision.id} is ${decision.outcome}`,
+    );
+  }
+  if (decision.invoiceId !== invoice.id) {
+    throw new Error(`Decision ${decision.id} belongs to ${decision.invoiceId}, not ${invoice.id}`);
+  }
+  // A rejection is final, and so is an approval that was blocked: once its own entry is no longer
+  // pending, the escalation cannot be approved again (for example next month, with a fresh budget).
+  if (!ctx.history.some((entry) => isOwnPendingEntry(entry, invoice))) {
+    throw new Error(`Decision ${decision.id} is no longer pending approval`);
+  }
+  // R2 compares the invoice and R6 the decision: both must be the same money.
+  const { amountMinor, currency } = invoice.extraction;
+  if (decision.amountMinor !== amountMinor.value || decision.currency !== currency.value) {
+    throw new Error(`Decision ${decision.id} records other money than invoice ${invoice.id}`);
+  }
+  // The stored base amount must be the one its own stored rate gives; today's rate is never used.
+  const { amountMinor: storedAmount, exchangeRate, baseAmountMinor } = decision;
+  if (
+    baseAmountMinor !== null &&
+    (storedAmount === null ||
+      exchangeRate === null ||
+      convertToBaseMinor(storedAmount, exchangeRate) !== baseAmountMinor)
+  ) {
+    throw new Error(
+      `Decision ${decision.id} records a base amount its exchange rate does not give`,
+    );
+  }
 }
 
 // The rules see the money recorded when the invoice was escalated (invariant 8): if the rate changed

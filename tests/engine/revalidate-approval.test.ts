@@ -327,6 +327,65 @@ describe("revalidateApproval", () => {
       expect(() => resolve({ decision })).toThrow("Only an escalated decision can be resolved");
     });
 
+    it.each([
+      ["rejected", "REJECTED" as const],
+      ["blocked at a previous approval", "BLOCKED" as const],
+      ["already approved and paid", "PAYABLE" as const],
+    ])("refuses to resolve again an escalation already %s", (_case, status) => {
+      const history = [pendingEntry({ status })];
+      expect(() => resolve({ history })).toThrow("is no longer pending approval");
+      const reject = { ...APPROVE, action: "REJECT" as const };
+      expect(() => resolve({ request: reject, history })).toThrow("is no longer pending approval");
+    });
+
+    it("refuses to approve next month, with a fresh budget, what was blocked this month", () => {
+      const history = [pendingEntry(), committedLeaving(0)];
+      expect(resolve({ history }).resultingOutcome).toBe("BLOCK");
+      const afterBlock = [pendingEntry({ status: "BLOCKED" }), committedLeaving(0)];
+      expect(() => resolve({ history: afterBlock, now: "2026-11-02T14:00:00Z" })).toThrow(
+        "is no longer pending approval",
+      );
+    });
+
+    it("refuses an escalation that is not in history", () => {
+      expect(() => resolve({ history: [] })).toThrow("is no longer pending approval");
+    });
+
+    it("refuses a decision whose money differs from the invoice, so R2 and R6 see the same", () => {
+      const invoice = buildInvoice();
+      invoice.extraction.amountMinor = { ...invoice.extraction.amountMinor, value: 100_000 };
+      expect(() => resolve({ invoice })).toThrow("records other money than invoice inv-1");
+      const decision = buildDecision({
+        currency: "MXN",
+        exchangeRate: "18.50",
+        baseAmountMinor: 13_514,
+      });
+      expect(() => resolve({ decision })).toThrow("records other money than invoice inv-1");
+    });
+
+    it("refuses a stored base amount that its own stored rate does not give", () => {
+      const invoice = buildInvoice();
+      invoice.extraction.amountMinor = { ...invoice.extraction.amountMinor, value: 8_000_000_000 };
+      invoice.extraction.currency = { ...invoice.extraction.currency, value: "COP" };
+      const tampered = buildDecision({
+        amountMinor: 8_000_000_000,
+        currency: "COP",
+        exchangeRate: "4000",
+        baseAmountMinor: 1,
+      });
+      const history = [
+        pendingEntry({
+          amountMinor: 8_000_000_000,
+          currency: "COP",
+          exchangeRate: "4000",
+          baseAmountMinor: 1,
+        }),
+      ];
+      expect(() => resolve({ invoice, decision: tampered, history })).toThrow(
+        "records a base amount its exchange rate does not give",
+      );
+    });
+
     it("refuses a decision of another invoice", () => {
       const decision = buildDecision({ invoiceId: "inv-9" });
       expect(() => resolve({ decision })).toThrow("belongs to inv-9");
