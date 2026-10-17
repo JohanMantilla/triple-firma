@@ -203,6 +203,22 @@ describe("evaluateSplitPaymentRule (R7)", () => {
   });
 
   describe("which earlier payments count", () => {
+    it("counts a pending escalation whatever its date: it would be paid when approved, today or later", () => {
+      const oldPending = earlier(100_001, {
+        status: "PENDING_APPROVAL",
+        decidedAt: "2026-10-01T14:00:00Z",
+      });
+      expect(evaluate({ history: [oldPending] })).toMatchObject({
+        outcome: "ESCALATE",
+        compared: { earlierCount: 1, totalMinor: 200_001 },
+      });
+    });
+
+    it("does not count a payable entry outside the window", () => {
+      const oldPaid = earlier(100_001, { status: "PAYABLE", decidedAt: "2026-10-01T14:00:00Z" });
+      expect(evaluate({ history: [oldPaid] }).outcome).toBe("PASS");
+    });
+
     it.each([["PAYABLE" as const], ["PENDING_APPROVAL" as const]])(
       "counts a %s payment",
       (status) => {

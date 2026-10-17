@@ -12,7 +12,9 @@ import { daysBetween, type RuleContext, toLocalDate } from "../rule-context";
 //
 // Earlier payments are PAYABLE and PENDING_APPROVAL entries (the parts of a split usually arrive
 // together, so the first ones may still be pending) with a known base amount; REJECTED and BLOCKED
-// are never paid. The payee must match exactly through normalizePayee: a look-alike name is R3's job.
+// are never paid. The window applies to PAYABLE entries only: a pending escalation, if it is ever paid,
+// is paid when approved, today or later, so it counts whatever date it was escalated on. The payee must
+// match exactly through normalizePayee: a look-alike name is R3's job.
 // An entry with this invoice's id counts too, as in R6: ids are assigned outside the engine, and
 // deciding an invoice again can then escalate it but never pay it twice (R7 is not revalidated at
 // approval). Without earlier payments there is no split, and an invoice that alone exceeds the
@@ -83,7 +85,7 @@ export function evaluateSplitPaymentRule(ctx: RuleContext): RuleResult {
   );
 }
 
-// An entry decided in the future (a clock skew or a replay) still counts: the stricter choice.
+// A PAYABLE entry decided in the future (a clock skew or a replay) still counts: the stricter choice.
 function isEarlierPart(
   entry: HistoryEntry,
   ctx: RuleContext,
@@ -93,6 +95,7 @@ function isEarlierPart(
   if (!isCountedInBudget(entry.status)) return false;
   if (entry.baseAmountMinor === null || entry.payee === null) return false;
   if (normalizePayee(entry.payee) !== normalizePayee(payee)) return false;
+  if (entry.status === "PENDING_APPROVAL") return true;
   const decidedOn = toLocalDate(entry.decidedAt, ctx.config.timezone);
   return daysBetween(decidedOn, today) < ctx.config.splitPaymentWindowDays;
 }

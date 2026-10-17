@@ -70,6 +70,18 @@ describe("evaluateRules", () => {
     expect(decision.ruleResults.find((result) => result.ruleId === "R7")?.outcome).toBe("ESCALATE");
   });
 
+  it("does not pay when an older part of a split payment is still pending approval", () => {
+    const pendingPart = buildHistoryEntry({
+      invoiceId: "inv-a",
+      reference: "INV-090",
+      status: "PENDING_APPROVAL",
+      amountMinor: 100_000,
+      baseAmountMinor: 100_000,
+      decidedAt: "2026-10-01T14:00:00Z",
+    });
+    expect(evaluateRules({ ...cleanInput, history: [pendingPart] }).outcome).toBe("ESCALATE");
+  });
+
   it("escalates the fixture invoice over the default threshold, never paying it", () => {
     expect(evaluateRules(input).outcome).toBe("ESCALATE");
   });
