@@ -14,6 +14,7 @@ export const MESSAGES = {
     payee: "Beneficiario",
     amountMinor: "Monto",
     currency: "Moneda",
+    issueDate: "Fecha de emisión",
     dueDate: "Vencimiento",
     reference: "Referencia",
   },
@@ -140,6 +141,33 @@ export const MESSAGES = {
       budget: string,
     ) =>
       `R6: presupuesto de ${period}: ${committed} comprometidos${reserved === null ? "" : ` + ${reserved} reservados`} + este pago (${amount}) = ${total} de ${budget}.`,
+  },
+
+  suspiciousContent: {
+    // A passing result says exactly what was checked: the total is never said to match when it was
+    // not compared.
+    passed: {
+      matches:
+        "R10: no se encontraron instrucciones dirigidas al sistema y el total cuadra con la suma de ítems.",
+      matchesWithTax:
+        "R10: no se encontraron instrucciones dirigidas al sistema y el total cuadra con la suma de ítems más impuestos.",
+      amountUnreadable:
+        "R10: no se encontraron instrucciones dirigidas al sistema; el total no se comparó con la suma de ítems porque el monto no se pudo leer.",
+      noLineItems:
+        "R10: no se encontraron instrucciones dirigidas al sistema; la factura no detalla ítems.",
+    },
+    readerFlagged: (firstFlag: string, count: number) =>
+      `el Lector marcó texto sospechoso: ${quoteUntrusted(firstFlag)}${count > 1 ? ` (${count} en total)` : ""}.`,
+    instructionInSource: (match: string) =>
+      `el texto original contiene una instrucción dirigida al sistema, que se ignoró: ${quoteUntrusted(match)}.`,
+    instructionInField: (label: string, match: string) =>
+      `lo leído en ${label} contiene una instrucción dirigida al sistema, que se ignoró: ${quoteUntrusted(match)}.`,
+    totalMismatch: (amount: string, lineItemsSum: string, tax: string | null) =>
+      tax === null
+        ? `el total (${amount}) no cuadra con la suma de ítems (${lineItemsSum}).`
+        : `el total (${amount}) no cuadra con la suma de ítems (${lineItemsSum}) más impuestos (${tax}).`,
+    escalated: (reasons: readonly string[]) =>
+      `R10: ${reasons.join(" ")} Requiere revisión humana.`,
   },
 };
 
