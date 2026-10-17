@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   isAmountSupported,
+  isCurrencySupported,
+  isDueDateSupported,
   isPayeeSupported,
-  isRawSupported,
   isReferenceSupported,
 } from "@/engine/rules/extraction-evidence";
 
@@ -67,17 +68,49 @@ describe("isAmountSupported", () => {
   });
 });
 
-describe("isRawSupported", () => {
-  it("supports raw text that appears in the evidence, ignoring case and spacing", () => {
-    expect(isRawSupported("Oct 30, 2026", "Due:   oct 30,  2026")).toBe(true);
+describe("isCurrencySupported", () => {
+  it.each([
+    ["USD", "Total: USD 2,500.00"],
+    ["USD", "Total US$ 2,500.00"],
+    ["COP", "Valor: COP 4.500.000"],
+    ["COP", "4.500.000 cop"],
+  ])("supports %s with %j", (currency, evidence) => {
+    expect(isCurrencySupported(currency, evidence)).toBe(true);
   });
 
   it.each([
-    [null, "Total: USD 2,500.00"],
-    ["", "Total: USD 2,500.00"],
-    ["   ", "Total: USD 2,500.00"],
-    ["EUR", "Total: USD 2,500.00"],
-  ])("does not support the raw %j", (raw, evidence) => {
-    expect(isRawSupported(raw, evidence)).toBe(false);
+    ["COP", "Total USD 2,500.00"],
+    ["USD", "Total $ 2,500.00"],
+    ["USD", "Total USDT 2,500.00"],
+    ["MXN", "Total 2,500.00"],
+  ])("does not support %s with %j", (currency, evidence) => {
+    expect(isCurrencySupported(currency, evidence)).toBe(false);
+  });
+});
+
+describe("isDueDateSupported", () => {
+  it.each([
+    ["2026-10-30", "Due: Oct 30, 2026"],
+    ["2026-10-30", "Vence: 30/10/2026"],
+    ["2026-10-30", "Fecha límite: 2026-10-30"],
+    ["2026-10-30", "Pagar antes del 30 de octubre de 2026"],
+    ["2026-08-05", "Vence el 5 de agosto de 2026"],
+    ["2026-05-05", "Due 05/05/2026"],
+    ["2026-09-15", "Vence el 15 de setiembre de 2026"],
+    ["2026-12-01", "Due Dec. 1, 2026"],
+  ])("supports %s with %j", (isoDate, evidence) => {
+    expect(isDueDateSupported(isoDate, evidence)).toBe(true);
+  });
+
+  it.each([
+    ["2026-01-01", "Due: Oct 30, 2026"],
+    ["2026-10-30", "Vence: 30/10/26"],
+    ["2026-10-30", "Due: Oct 31, 2026"],
+    ["2026-05-05", "Due 5 2026"],
+    ["2026-10-30", "Factura del mes"],
+    ["2026-09-30", "Vence 30 2026, pago separado"],
+    ["2026-03-30", "Vence 30 2026, marca registrada"],
+  ])("does not support %s with %j", (isoDate, evidence) => {
+    expect(isDueDateSupported(isoDate, evidence)).toBe(false);
   });
 });

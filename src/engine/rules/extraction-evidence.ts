@@ -41,10 +41,56 @@ export function isAmountSupported(amountMinor: number, evidence: string): boolea
   return numbers.some((number) => toMinorUnits(number) === target);
 }
 
-// Currency and due date are normalized by the extraction, so their raw text must be in the evidence.
-export function isRawSupported(raw: string | null, evidence: string): boolean {
-  if (raw === null || raw.trim() === "") return false;
-  return normalizeForSearch(evidence).includes(normalizeForSearch(raw));
+// The ISO code of the currency must appear as a word ("USD 2,500.00"); "US$" also means USD. A bare
+// "$" is ambiguous (Colombia, Mexico and Argentina use it too), so it does not support any currency.
+export function isCurrencySupported(currency: string, evidence: string): boolean {
+  const text = evidence.normalize("NFKC").toUpperCase();
+  if (currency === "USD" && text.includes("US$")) return true;
+  return new RegExp(`(^|[^A-Z])${currency}([^A-Z]|$)`).test(text);
+}
+
+// Full names and abbreviations, in English and Spanish, matched as whole words ("sep" is September,
+// but "separado" is not).
+const MONTH_NAMES: readonly (readonly string[])[] = [
+  ["jan", "january", "ene", "enero"],
+  ["feb", "february", "febrero"],
+  ["mar", "march", "marzo"],
+  ["apr", "april", "abr", "abril"],
+  ["may", "mayo"],
+  ["jun", "june", "junio"],
+  ["jul", "july", "julio"],
+  ["aug", "august", "ago", "agosto"],
+  ["sep", "sept", "september", "set", "septiembre", "setiembre"],
+  ["oct", "october", "octubre"],
+  ["nov", "november", "noviembre"],
+  ["dec", "december", "dic", "diciembre"],
+];
+
+// The year (4 digits), day and month of the ISO due date must all appear in the evidence; the month
+// may be a number or an English or Spanish name ("Oct 30, 2026", "30/10/2026", "30 de octubre de 2026").
+export function isDueDateSupported(isoDate: string, evidence: string): boolean {
+  const [year, month, day] = isoDate.split("-");
+  const text = normalizeForSearch(evidence);
+  const numbers = text.match(/\d+/g) ?? [];
+  const isDayOrMonth = (target: string) => (number: string) =>
+    number.length <= 2 && Number(number) === Number(target);
+
+  if (!removeFirst(numbers, (number) => number === year)) return false;
+  if (!removeFirst(numbers, isDayOrMonth(day))) return false;
+  return removeFirst(numbers, isDayOrMonth(month)) || hasMonthName(text, Number(month));
+}
+
+// Removes the first item that matches, so the same number cannot count as both day and month.
+function removeFirst(items: string[], matches: (item: string) => boolean): boolean {
+  const index = items.findIndex(matches);
+  if (index === -1) return false;
+  items.splice(index, 1);
+  return true;
+}
+
+function hasMonthName(text: string, month: number): boolean {
+  const words = text.split(/[^\p{L}]+/u);
+  return MONTH_NAMES[month - 1].some((name) => words.includes(name));
 }
 
 function toMinorUnits(number: string): bigint {

@@ -4,8 +4,9 @@ import { MESSAGES } from "../messages";
 import type { RuleContext } from "../rule-context";
 import {
   isAmountSupported,
+  isCurrencySupported,
+  isDueDateSupported,
   isPayeeSupported,
-  isRawSupported,
   isReferenceSupported,
   normalizeForSearch,
 } from "./extraction-evidence";
@@ -89,9 +90,14 @@ function isValueSupported(extraction: Extraction, field: RequiredField, evidence
         isAmountSupported(extraction.amountMinor.value, evidence)
       );
     case "currency":
-      return isRawSupported(extraction.currency.raw, evidence);
+      return (
+        extraction.currency.value !== null &&
+        isCurrencySupported(extraction.currency.value, evidence)
+      );
     case "dueDate":
-      return isRawSupported(extraction.dueDate.raw, evidence);
+      return (
+        extraction.dueDate.value !== null && isDueDateSupported(extraction.dueDate.value, evidence)
+      );
   }
 }
 

@@ -106,15 +106,21 @@ describe("evaluateExtractionRule (R1)", () => {
     });
   });
 
-  it.each(["currency", "dueDate"] as const)(
-    "escalates a %s whose raw text is missing from its evidence",
-    (field) => {
-      expect(evaluate(withField(field, { raw: "XYZ" }))).toMatchObject({
-        outcome: "ESCALATE",
-        compared: { valueNotSupported: field },
-      });
-    },
-  );
+  it("escalates a currency value that its evidence does not show, even if the raw text does", () => {
+    const invoice = withField("currency", { raw: "USD", value: "COP" });
+    expect(evaluate(invoice)).toMatchObject({
+      outcome: "ESCALATE",
+      compared: { valueNotSupported: "currency", currencyEvidence: "Total: USD 2,500.00" },
+    });
+  });
+
+  it("escalates a due date that its evidence does not show, so it cannot dodge R9", () => {
+    const invoice = withField("dueDate", { raw: "Oct 30, 2026", value: "2026-01-01" });
+    expect(evaluate(invoice)).toMatchObject({
+      outcome: "ESCALATE",
+      compared: { valueNotSupported: "dueDate" },
+    });
+  });
 
   it("escalates evidence too short to support the value", () => {
     const invoice = withField("payee", { evidence: "D" });
