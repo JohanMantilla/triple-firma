@@ -5,7 +5,7 @@ import path from "node:path";
 import type { Client } from "@libsql/client";
 import type { Decision } from "@/contracts/decision";
 import type { Invoice } from "@/contracts/invoice";
-import { type Executor, openDb, withWriteTransaction } from "@/store/db";
+import { openDb, withWriteTransaction } from "@/store/db";
 import { insertDecision } from "@/store/decision-repository";
 import { insertInvoice } from "@/store/invoice-repository";
 import { buildInvoice } from "../engine/fixtures";
