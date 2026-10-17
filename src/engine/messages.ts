@@ -6,8 +6,6 @@ export const MESSAGES = {
   allRulesPassed: "Pagada: todas las reglas pasaron.",
   escalatedPrefix: "Escalada:",
   blockedPrefix: "Frenada:",
-  ruleNotImplemented: (ruleId: RuleId) =>
-    `${ruleId}: la regla aún no está implementada; se escala por seguridad.`,
   ruleFailed: (ruleId: RuleId) => `${ruleId}: la regla no pudo evaluarse; se escala por seguridad.`,
 
   fieldLabels: {
@@ -102,6 +100,8 @@ export const MESSAGES = {
   duplicate: {
     sameFile: (invoiceId: string) =>
       `R2: este mismo archivo ya se procesó como la factura ${invoiceId}.`,
+    alreadyPending: (invoiceId: string) =>
+      `R2: esta factura ya está pendiente de aprobación como ${invoiceId}; la decide una persona.`,
     unreadable: (labels: string) =>
       `R2: no se puede verificar si es duplicada porque no se pudo leer con certeza: ${labels}.`,
     // payee arrives already quoted by the rule; references are quoted here.
@@ -141,6 +141,19 @@ export const MESSAGES = {
       budget: string,
     ) =>
       `R6: presupuesto de ${period}: ${committed} comprometidos${reserved === null ? "" : ` + ${reserved} reservados`} + este pago (${amount}) = ${total} de ${budget}.`,
+  },
+
+  splitPayment: {
+    unreadablePayee:
+      "R7: no se pudo leer con certeza el beneficiario para buscar pagos fraccionados; se escala por seguridad.",
+    missingBaseAmount: (baseCurrency: string) =>
+      `R7: no se pudo calcular el monto en ${baseCurrency} para sumarlo con los pagos al mismo beneficiario; se escala por seguridad.`,
+    noEarlierPayments: (payee: string, windowDays: number) =>
+      `R7: no hay otros pagos a ${quoteUntrusted(payee)} ${withinWindow(windowDays)}.`,
+    overThreshold: (payee: string, total: string, parts: SummedParts, threshold: string) =>
+      `R7: ${quoteUntrusted(payee)} suma ${total} ${describeParts(parts)}; supera el umbral de aprobación de ${threshold}; requiere revisión humana.`,
+    withinThreshold: (payee: string, total: string, parts: SummedParts, threshold: string) =>
+      `R7: ${quoteUntrusted(payee)} suma ${total} ${describeParts(parts)}, dentro del umbral de aprobación de ${threshold}.`,
   },
 
   suspiciousContent: {
@@ -190,6 +203,30 @@ const MONTH_NAMES = [
 export function formatPeriod(period: Period): string {
   const [year, month] = period.split("-");
   return `${MONTH_NAMES[Number(month) - 1]} de ${year}`;
+}
+
+// The invoices R7 summed: earlier payments inside the window and pending escalations of any date.
+export type SummedParts = { windowDays: number; paymentCount: number; pendingCount: number };
+
+// "en los últimos 7 días (3 facturas, incluida esta)" when every earlier part is a payment inside the
+// window. A pending escalation counts whatever its date, so then the sentence names it instead of
+// claiming a window: "con esta factura, 1 pago en los últimos 7 días y 1 escalada pendiente de
+// aprobación de cualquier fecha".
+function describeParts({ windowDays, paymentCount, pendingCount }: SummedParts): string {
+  if (pendingCount === 0) {
+    return `${withinWindow(windowDays)} (${paymentCount + 1} facturas, incluida esta)`;
+  }
+  const payments =
+    paymentCount === 0
+      ? ""
+      : `, ${paymentCount} ${paymentCount === 1 ? "pago" : "pagos"} ${withinWindow(windowDays)}`;
+  const pending = `${pendingCount} ${pendingCount === 1 ? "escalada pendiente" : "escaladas pendientes"}`;
+  return `con esta factura${payments} y ${pending} de aprobación de cualquier fecha`;
+}
+
+// "en los últimos 7 días", or "hoy" for a one-day window.
+function withinWindow(windowDays: number): string {
+  return windowDays === 1 ? "hoy" : `en los últimos ${windowDays} días`;
 }
 
 // "USD, COP, MXN y ARS"

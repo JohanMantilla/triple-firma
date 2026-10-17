@@ -18,12 +18,12 @@ import { evaluateDueDateRule } from "./rules/due-date-rule";
 import { evaluateExtractionRule } from "./rules/extraction-rule";
 import { evaluatePayeeRule } from "./rules/payee-rule";
 import { evaluatePaymentLimitRule } from "./rules/payment-limit-rule";
+import { evaluateSplitPaymentRule } from "./rules/split-payment-rule";
 import { evaluateSuspiciousContentRule } from "./rules/suspicious-content-rule";
 
 export type RuleEvaluator = (ctx: RuleContext) => RuleResult;
 
 // One evaluator per rule. A record keyed by RuleId makes TypeScript refuse a missing rule.
-// Each placeholder is replaced by its real rule in its own PR; until then it escalates (fail-safe).
 const RULES: Record<RuleId, RuleEvaluator> = {
   R1: evaluateExtractionRule,
   R2: evaluateDuplicateRule,
@@ -31,7 +31,7 @@ const RULES: Record<RuleId, RuleEvaluator> = {
   R4: evaluateAgreementRule,
   R5: evaluatePaymentLimitRule,
   R6: evaluateBudgetRule,
-  R7: notImplemented("R7"),
+  R7: evaluateSplitPaymentRule,
   R8: evaluateCurrencyRule,
   R9: evaluateDueDateRule,
   R10: evaluateSuspiciousContentRule,
@@ -101,13 +101,4 @@ function failedRule(ruleId: RuleId, reason: string): RuleResult {
     message: MESSAGES.ruleFailed(ruleId),
     compared: { error: reason },
   };
-}
-
-function notImplemented(ruleId: RuleId): RuleEvaluator {
-  return () => ({
-    ruleId,
-    outcome: "ESCALATE",
-    message: MESSAGES.ruleNotImplemented(ruleId),
-    compared: {},
-  });
 }
