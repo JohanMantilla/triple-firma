@@ -56,7 +56,7 @@ describe("ExtractionSchema", () => {
 
   it("rejects a payee made only of invisible characters", () => {
     const extraction = buildExtraction();
-    extraction.payee = { ...extraction.payee, value: "​ ‍" };
+    extraction.payee = { ...extraction.payee, value: "\u200B \u200D" };
     expect(ExtractionSchema.safeParse(extraction).success).toBe(false);
   });
 });

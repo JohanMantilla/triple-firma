@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeReference, ReferenceSchema } from "@/contracts/reference";
 
 describe("normalizeReference", () => {
-  it.each(["FAC-102", "fac 102", "FAC/102", "FAC.102", "FAC_102", " FAC # 102 ", "FAC​-102"])(
+  it.each(["FAC-102", "fac 102", "FAC/102", "FAC.102", "FAC_102", " FAC # 102 ", "FAC\u200B-102"])(
     "treats %j as FAC102",
     (reference) => {
       expect(normalizeReference(reference)).toBe("FAC102");
@@ -10,7 +10,7 @@ describe("normalizeReference", () => {
   );
 
   it("treats full-width characters as their regular form", () => {
-    expect(normalizeReference("ＦＡＣ－１０２")).toBe("FAC102");
+    expect(normalizeReference("\uFF26\uFF21\uFF23\uFF0D\uFF11\uFF10\uFF12")).toBe("FAC102");
   });
 
   it.each([
@@ -27,7 +27,7 @@ describe("ReferenceSchema", () => {
     expect(ReferenceSchema.safeParse("FAC-102").success).toBe(true);
   });
 
-  it.each(["", "   ", "--/", "​", "x".repeat(101)])("rejects %j", (reference) => {
+  it.each(["", "   ", "--/", "\u200B", "x".repeat(101)])("rejects %j", (reference) => {
     expect(ReferenceSchema.safeParse(reference).success).toBe(false);
   });
 });

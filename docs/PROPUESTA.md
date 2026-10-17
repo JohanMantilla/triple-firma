@@ -92,7 +92,7 @@ Configuración editable desde la pantalla. **Una regla sin configurar nunca pasa
 | | Casi duplicado: la referencia difiere en un carácter o en ceros a la izquierda ("FAC-102" vs "FAC-103" o "FAC-0102") con el mismo beneficiario y monto | ESCALAR | "Posible duplicado de FAC-102, requiere revisión." |
 |                                | Coincide con una factura que antes fue **rechazada** por una persona o **frenada** (aunque sea otro archivo)       | ESCALAR | "Esta factura coincide con FAC-102, que fue rechazada el 03/10; requiere revisión." |
 | **R3 Beneficiario** | Coincidencia exacta normalizada | pasa | |
-| | Coincidencia aproximada ("Corp" vs "Corp.", Unicode parecido) | ESCALAR | "El nombre se parece a 'Dev Partners SAS' pero no es idéntico." |
+| | Coincidencia aproximada: difiere en tildes, en una letra de otro alfabeto (por ejemplo, una "a" cirílica que se ve igual a la latina), en un carácter o en signos como `&` o `-` ("Acmé Corp", "A&B" vs "AB"). Las diferencias de mayúsculas, espacios, puntos y comas ("Corp." vs "Corp", "S.A.S." vs "SAS") **no** cuentan: son coincidencia exacta | ESCALAR | "El nombre se parece a 'Dev Partners SAS' pero no es idéntico." |
 | | No está en la lista | ESCALAR | "Beneficiario nuevo: no está en la lista permitida." |
 | | Marcado como bloqueado | FRENAR | |
 | **R4 Conforme a lo acordado** | Monto, moneda o vigencia no coinciden con el acuerdo (tolerancia configurable en la **moneda del acuerdo**, por defecto 0) | FRENAR | "Cobra USD 3.000; lo acordado es USD 2.500 mensuales." |
@@ -149,7 +149,7 @@ Una regla se mantiene en cualquier caso: "URGENTE" o "pagar hoy" escrito en la f
 - **`expected.csv`**, escrito a mano por la persona C: `archivo, decisión esperada, reglas que deben disparar`. Ningún proceso automático lo modifica.
 
 **Trampas obligatorias del reto, todas cubiertas:** duplicado, beneficiario nuevo, no cuadra con lo acordado, sobre el umbral, presupuesto agotado.
-**Nuestras trampas extra:** casi duplicado, "Corp" vs "Corp.", separador decimal confuso, subtotal vs total, inyección de instrucciones, fraccionamiento, conversión de moneda que cruza el umbral por un centavo, cambio de mes y reenvío de la misma factura (idempotencia).
+**Nuestras trampas extra:** casi duplicado, nombre parecido con tilde o letra cirílica ("Acmé Corp", o "Acme Corp" escrito con una "a" cirílica), separador decimal confuso, subtotal vs total, inyección de instrucciones, fraccionamiento, conversión de moneda que cruza el umbral por un centavo, cambio de mes y reenvío de la misma factura (idempotencia).
 
 ---
 
@@ -384,7 +384,7 @@ Los contratos ya están en `src/contracts/` (uno por concepto, Zod 4) y son la f
 |---|---|---|
 | `money.ts` | `CurrencyCodeSchema`, `SupportedCurrencySchema`, `ExchangeRateSchema`, `MinorAmountSchema` | Montos enteros; tasas como texto decimal positivo, nunca `number`; la configuración solo admite USD, COP, MXN y ARS (todas con 2 decimales) |
 | `dates.ts` | `IsoDateSchema`, `IsoDateTimeSchema`, `PeriodSchema`, `TimezoneSchema` | Fechas guardadas siempre en UTC; periodo `AAAA-MM`; zona horaria IANA válida |
-| `payee.ts` | `normalizePayee`, `PayeeNameSchema` | Una sola forma de comparar nombres (mayúsculas, puntuación, espacios, caracteres invisibles), usada por la configuración y por R3 |
+| `payee.ts` | `normalizePayee`, `PayeeNameSchema` | Una sola forma de comparar nombres, usada por la configuración y por R3: ignora mayúsculas, espacios, caracteres invisibles, puntos y comas; conserva tildes, otros alfabetos y signos como `&` o `-` |
 | `reference.ts` | `normalizeReference`, `ReferenceSchema` | Una sola forma de comparar referencias para R2 (mayúsculas, espacios, guiones, barras, puntos y caracteres invisibles): "FAC-102" y "fac 102" son la misma |
 | `extraction.ts` | `ExtractionSchema` | Cada campo con `raw`, `value`, `evidence` e `isUncertain`; monto positivo (0 o negativo queda incierto y R1 escala) |
 | `invoice.ts` | `InvoiceSchema` | Hash SHA-256 del archivo, formato de origen y `sourceText` (obligatorio en correos y chats) para que R10 no dependa solo del LLM |
