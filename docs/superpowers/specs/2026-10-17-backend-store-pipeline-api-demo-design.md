@@ -162,10 +162,12 @@ Two conventions:
 | File | Schema | Shape |
 |---|---|---|
 | `decision-record.ts` | `DecisionRecordSchema` | `{ fileName: string, status: HistoryEntryStatus, invoice: Invoice, decision: Decision, approval: Approval \| null, extractionFailure: string \| null }` |
+| `metrics.ts` | `ExpectedDecisionSchema` | `{ fileName, expectedOutcome: DecisionOutcome, expectedRuleIds: RuleId[] }`: one row of `data/expected.csv` |
 | `metrics.ts` | `MetricsSchema` | `{ total, leaks, leakFiles: string[], missingFiles: string[], accuracy, autonomy, overEscalation, explainability, ruleMatchRate }`. Counts are non-negative ints; rates are `number` in [0, 1], or `null` when the denominator is 0 |
-| `audit-entry.ts` | `AuditVerificationSchema` | `{ isValid: boolean, entryCount: int, firstInvalidSeq: int \| null, lastHash: Sha256 \| null }` |
+| `audit-entry.ts` | `AuditVerificationSchema` | `{ isValid: boolean, entryCount: int, firstInvalidSeq: int \| null, lastHash: string \| null }`. `firstInvalidSeq` is the position of the first bad entry; `lastHash` is a plain string because a tampered row may hold anything |
 | `rules-config.ts` | `RulesConfigVersionSchema` | `{ version: positive int, config: RulesConfig, createdAt: IsoDateTime }` |
-| `api-error.ts` | `ApiErrorSchema` | `{ error: string, issues?: { path: string, message: string }[] }` |
+| `api-error.ts` | `ApiErrorCodeSchema`, `ApiErrorSchema` | `{ error: ApiErrorCode, issues?: { path: string, message: string }[] }`. `ApiErrorCode` is `INVALID_REQUEST`, `MISSING_FILE`, `FILE_TOO_LARGE`, `UNSUPPORTED_FILE_TYPE`, `EMPTY_SOURCE_TEXT`, `SOURCE_TEXT_TOO_LONG`, `NO_RULES_CONFIG`, `NOT_FOUND`, `NOT_ESCALATED` or `ALREADY_RESOLVED`. The API sends codes, never user-facing text; D translates them into Spanish |
+| `decision-record.ts` | `deriveHistoryStatus(outcome, approval)` | The status table below, as one pure function shared by the store, the record schema and the API |
 
 New glossary rows:
 - `fileName`, UI "Archivo": the file name as received; for the dataset it is `<set>/<name>`.
@@ -255,13 +257,13 @@ Steps:
    - It returns `{ ok: true, extraction, cached }` or `{ ok: false, extraction, reason }`; the extraction is all-uncertain on failure.
    - The LLM call must not hold the database write lock.
 4. Build `invoice = InvoiceSchema.parse({ id: randomUUID(), fileHash, sourceFormat, sourceText, receivedAt: now, extraction })`.
-5. Open `db.transaction("write")`. It starts with `BEGIN IMMEDIATE`, so write transactions run one at a time.
+5. Open a write transaction through `withWriteTransaction` (`src/store/db.ts`). It starts with `BEGIN IMMEDIATE`, and the same helper also queues write transactions inside the process. A local file blocks the event loop while it waits for a lock held by the same process, so two concurrent writes would end in `SQLITE_BUSY` without that queue. Turso queues writers across processes on its own.
    1. Re-check `findDecisionByFileHash`. Two concurrent uploads of the same file end with one decision, and the second gets `isResubmission: true`.
    2. `findCurrentRulesConfig`: none gives rollback and `NO_RULES_CONFIG`. Then `listHistoryEntries`.
    3. `decision = evaluateRules({ invoice, config, history, now, configVersion })`.
    4. `period = toPeriod(now, config.timezone)`.
    5. `insertInvoice`, `insertDecision`, then `appendAuditEntry(DECISION)`.
-   6. Commit. On any error: rollback, rethrow, and the route answers 500. Nothing is stored.
+   6. Commit. On any error: rollback and rethrow; Next answers 500. Nothing is stored.
 
 This fixes the race in PROPUESTA §6.2 step 5. History is read inside the same write transaction that stores the decision, so two concurrent invoices cannot both see the same remaining budget.
 
@@ -279,11 +281,11 @@ This fixes the race in PROPUESTA §6.2 step 5. History is read inside the same w
 
 `resolveApproval(db, decisionId, request: ApprovalRequest, now)` returns:
 - `{ ok: true, record: DecisionRecord }`, or
-- `{ ok: false, reason: "DECISION_NOT_FOUND" | "NOT_ESCALATED" | "ALREADY_RESOLVED" }`.
+- `{ ok: false, reason: "NOT_FOUND" | "NOT_ESCALATED" | "ALREADY_RESOLVED" }`.
 
 Everything runs in one `db.transaction("write")`:
 
-1. **Checks.** `findDecisionRecord(tx, decisionId)` returns `DECISION_NOT_FOUND` if there is no such decision, `NOT_ESCALATED` if the outcome is not `ESCALATE`, and `ALREADY_RESOLVED` if an approval already exists. The `approvals` primary key backs this check if two requests race.
+1. **Checks.** `findDecisionRecord(tx, decisionId)` returns `NOT_FOUND` if there is no such decision, `NOT_ESCALATED` if the outcome is not `ESCALATE`, and `ALREADY_RESOLVED` if an approval already exists. The `approvals` primary key backs this check if two requests race.
 2. **Config.** Load `config = findCurrentRulesConfig(tx)`. It always exists when a decision exists; the time zone is needed for `period`.
 3. **Outcome.**
    - `REJECT`: `resultingOutcome: "BLOCK"`, `revalidationResults: []`.
@@ -337,7 +339,7 @@ Every `GET` handler starts with `await connection()` from `next/server`. Because
 | `GET /api/decisions/[id]` | — | 200 `DecisionRecord` | 404 |
 | `GET /api/config` | — | 200 `RulesConfigVersion` (current) | 404 none |
 | `PUT /api/config` | `RulesConfig` JSON | 200 `RulesConfigVersion` | 400 with `issues` from `RulesConfigSchema.safeParse` |
-| `POST /api/approvals/[decisionId]` | `ApprovalRequest` JSON | 200 updated `DecisionRecord` | 400 invalid body; 404 `DECISION_NOT_FOUND`; 409 `NOT_ESCALATED` or `ALREADY_RESOLVED` |
+| `POST /api/approvals/[decisionId]` | `ApprovalRequest` JSON | 200 updated `DecisionRecord` | 400 invalid body; 404 `NOT_FOUND`; 409 `NOT_ESCALATED` or `ALREADY_RESOLVED` |
 | `GET /api/audit/verify` | — | 200 `AuditVerification` | — |
 | `GET /api/metrics` | — | 200 `Metrics` | — |
 | `GET /api/invoices/[id]/file` (P1) | — | 200 original bytes, `Content-Type` by format | 404 |
@@ -362,7 +364,7 @@ Notes for D:
 | Field | Definition |
 |---|---|
 | `total` | expected rows that have a decision |
-| `missingFiles` | expected rows with no decision |
+| `missingFiles` | expected rows with no decision. A byte-identical resend returns the original record and stores no new one, so its own row shows here: C leaves such resends out of `expected.csv` (idempotency is shown live and covered by tests) |
 | `leaks`, `leakFiles` | outcome `PAY` while expected is not `PAY` |
 | `accuracy` | outcome equals expected, over `total` |
 | `autonomy` | correct among rows expected `PAY` or `BLOCK`, over the count of those rows |
@@ -422,7 +424,7 @@ A rate is `null` when its denominator is 0.
 
 - E's code never decides: decisions come only from `evaluateRules`, and approval outcomes only from `revalidateApproval`. An unexpected error rolls the transaction back and stores nothing. Nothing is paid.
 - Extraction failures are B's typed result: an all-uncertain extraction that R1 escalates. Its `reason` is stored in `extraction_failure` and in the audit payload.
-- Expected failures are typed `{ ok: false, reason }` results; routes map them to 400, 404 or 409. Unexpected errors are not caught in the pipeline: the route answers 500 with `{ error }`, and the error is never swallowed.
+- Expected failures are typed `{ ok: false, reason }` results; routes map them to 400, 404 or 409. Unexpected errors are not caught: Next logs them and answers 500, and the error is never swallowed.
 - Every object is validated with its contract when written (`<Name>Schema.parse` before insert) and when read (`parse` after `JSON.parse`).
 
 ### Testing
@@ -447,7 +449,7 @@ Route handlers stay thin and are checked manually with `curl` (see Verification)
 - [ ] **B**: merge `feat/extraction-module` before E's pipeline PR; keep the `extractInvoice` signature from that branch.
 - [ ] **C**: `data/config/company.json` is a valid `RulesConfig`.
 - [ ] **C**: use the extensions `.eml` (email), `.txt` (chat), `.pdf`, `.png` and `.jpg`; the processing order is by file name, `dev` then `adversarial`.
-- [ ] **C**: agree the `DATASET_NOW` value and the `expected.csv` format above.
+- [ ] **C**: agree the `DATASET_NOW` value and the `expected.csv` format above; leave byte-identical resends out of `expected.csv`.
 - [ ] **C**: the "month change" trap cannot be expressed with a single batch clock. Engine tests cover it, unless C asks for per-file clocks.
 - [ ] **D**: add `uploadInvoice` to the api-client; mocks follow `DecisionRecord`, `RulesConfigVersion`, `AuditVerification`, `Metrics` and `ApiError`.
 
@@ -468,7 +470,7 @@ E's commits follow the list in PROPUESTA §7 exactly, in that order. Each one is
 | 9 | `feat(scripts): add demo, demo:live and demo:tamper commands` | `scripts/demo.ts`, `scripts/demo-tamper.ts`, the `package.json` scripts | 8, and C's `company.json` |
 | + | `feat(pipeline): compute metrics against expected decisions` (**extra**) | `compute-metrics.ts`, `GET /api/metrics` and tests. Not in the list: it comes from the decision that E owns the metrics formula, so A must be told | C's `expected.csv` format |
 | 10 | `ci: run lint, tests and eval on every push` | Adds `npm run eval` to `ci.yml`; lint and tests already run | C's `eval.ts`, which needs the extra commit |
-| 11 | `chore: configure turso database for vercel deployment` | Vercel env vars for `triple-firma-demo`; `serverExternalPackages: ["@libsql/client"]` if bundling fails; `outputFileTracingIncludes` for `data/expected.csv` and `data/cache`; seed with `npx tsx --env-file=<demo env file> scripts/demo.ts` | 9 |
+| 11 | `chore: configure turso database for vercel deployment` | Vercel env vars for `triple-firma-demo`; `outputFileTracingIncludes` for `data/expected.csv` and `data/cache`; seed with `npx tsx --env-file=<demo env file> scripts/demo.ts` | 9 |
 | 12 | `docs: add readme with setup, deploy steps and metrics` | Spanish README: Turso setup per developer, the demo commands, the deploy steps and the metrics table | 11 |
 
 **Where the list collides with the merged contracts:**
@@ -483,7 +485,7 @@ The MCP server is P2, is not in the list, and is the first thing cut.
 - `npm run lint` passes the dependency rule; `npm run typecheck`, `npm test` and `npm run build` pass (build touches no database).
 - With no API key, `npm run demo` against your own Turso database prints the counts and a valid chain, and the UI lists the decisions. Reloading after an approval shows it still resolved.
 - Plan B: with `TURSO_DATABASE_URL=file:local.db`, the same `npm run demo` works with no network.
-- Without `TURSO_DATABASE_URL`, `npm run dev` starts, and any API call answers 500 with `TURSO_DATABASE_URL is not set: see README`. `npm run build` passes without it.
+- Without `TURSO_DATABASE_URL`, `npm run dev` starts, and any API call answers 500, and the server log shows `TURSO_DATABASE_URL is not set: see README`. `npm run build` passes without it.
 - Upload twice with `curl -F file=@data/invoices/dev/<file> localhost:3000/api/invoices`: the second call answers 200 with the same `decision.id`.
 - Approve with `curl -X POST localhost:3000/api/approvals/<id> -H 'content-type: application/json' -d '{"action":"APPROVE","approver":"Ana","comment":"ok"}'`. A second identical call answers 409.
 - After `npm run demo:tamper`, `GET /api/audit/verify` answers `isValid: false` with the altered `seq`.
