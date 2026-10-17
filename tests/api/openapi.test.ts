@@ -7,6 +7,8 @@ const API_DIR = path.resolve(__dirname, "../../src/app/api");
 // The documentation routes describe the API itself and are not part of the document.
 const UNDOCUMENTED = new Set(["get /api/openapi.json", "get /api/docs"]);
 
+type Operations = Record<string, Record<string, Record<string, unknown>>>;
+
 function listRouteFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name);
@@ -15,24 +17,44 @@ function listRouteFiles(dir: string): string[] {
   });
 }
 
-function listRoutePairs(): string[] {
-  return listRouteFiles(API_DIR).flatMap((file) => {
-    const urlPath = `/api/${path.relative(API_DIR, path.dirname(file))}`
-      .replaceAll(path.sep, "/")
-      .replace(/\[(\w+)\]/g, "{$1}");
-    const source = readFileSync(file, "utf8");
-    const methods = [
-      ...source.matchAll(/export (?:async )?function (GET|POST|PUT|PATCH|DELETE)\b/g),
-    ];
-    return methods.map((match) => `${match[1]?.toLowerCase()} ${urlPath}`);
+export function toOpenApiPath(folder: string): string {
+  const segments = folder.split(path.sep).map((segment) => {
+    if (/^\[\w+\]$/.test(segment)) return `{${segment.slice(1, -1)}}`;
+    if (/[[\]()]/.test(segment)) throw new Error(`Unsupported route folder: ${segment}`);
+    return segment;
   });
+  return `/api/${segments.join("/")}`;
 }
 
-function listDocumentPairs(): string[] {
-  const { paths } = buildOpenApiDocument();
-  return Object.entries(paths).flatMap(([urlPath, item]) =>
-    Object.keys(item).map((method) => `${method} ${urlPath}`),
+export function listExportedMethods(source: string): string[] {
+  const methods = "GET|POST|PUT|PATCH|DELETE";
+  const declared = source.matchAll(
+    new RegExp(
+      `export (?:async )?function (${methods})\\b|export (?:const|let) (${methods})\\b`,
+      "g",
+    ),
   );
+  const listed = [...source.matchAll(/export \{([^}]*)\}/g)].flatMap((match) =>
+    (match[1] ?? "").split(",").map(
+      (name) =>
+        name
+          .trim()
+          .split(/\s+as\s+/)
+          .pop() ?? "",
+    ),
+  );
+  return [...[...declared].map((match) => match[1] ?? match[2] ?? ""), ...listed].filter((name) =>
+    new RegExp(`^(${methods})$`).test(name),
+  );
+}
+
+function listRoutePairs(): string[] {
+  return listRouteFiles(API_DIR).flatMap((file) => {
+    const urlPath = toOpenApiPath(path.relative(API_DIR, path.dirname(file)));
+    return listExportedMethods(readFileSync(file, "utf8")).map(
+      (method) => `${method.toLowerCase()} ${urlPath}`,
+    );
+  });
 }
 
 describe("buildOpenApiDocument", () => {
@@ -41,11 +63,15 @@ describe("buildOpenApiDocument", () => {
       .filter((pair) => !UNDOCUMENTED.has(pair))
       .sort();
     expect(expected.length).toBeGreaterThan(0);
-    expect(listDocumentPairs().sort()).toEqual(expected);
+    const { paths } = buildOpenApiDocument() as { paths: Operations };
+    const documented = Object.entries(paths).flatMap(([urlPath, item]) =>
+      Object.keys(item).map((method) => `${method} ${urlPath}`),
+    );
+    expect(documented.sort()).toEqual(expected);
   });
 
   it("gives every operation a unique operationId", () => {
-    const { paths } = buildOpenApiDocument();
+    const { paths } = buildOpenApiDocument() as { paths: Operations };
     const ids = Object.values(paths).flatMap((item) =>
       Object.values(item).map((operation) => operation.operationId),
     );
@@ -62,6 +88,25 @@ describe("buildOpenApiDocument", () => {
   });
 
   it("marks the rules update as human only", () => {
-    expect(buildOpenApiDocument().paths["/api/config"]?.put?.["x-human-only"]).toBe(true);
+    expect(buildOpenApiDocument().paths["/api/config"].put["x-human-only"]).toBe(true);
+  });
+});
+
+describe("route helpers", () => {
+  it("finds every export form of an HTTP method", () => {
+    const source = [
+      "export async function GET() {}",
+      "export const POST = () => {};",
+      "export { handler as PUT, other };",
+      "export function helper() {}",
+    ].join("\n");
+    expect(listExportedMethods(source).sort()).toEqual(["GET", "POST", "PUT"]);
+  });
+
+  it("converts folders and rejects unsupported ones", () => {
+    expect(toOpenApiPath(path.join("decisions", "[id]"))).toBe("/api/decisions/{id}");
+    for (const folder of ["[...slug]", "[[...slug]]", "(group)"]) {
+      expect(() => toOpenApiPath(path.join("x", folder))).toThrow(folder);
+    }
   });
 });

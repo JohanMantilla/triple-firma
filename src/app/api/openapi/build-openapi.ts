@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ApiErrorCodeSchema, ApiErrorSchema } from "@/contracts/api-error";
+import { ApiErrorSchema } from "@/contracts/api-error";
 import { AuditVerificationSchema } from "@/contracts/audit-entry";
 import { DecisionRecordSchema } from "@/contracts/decision-record";
 import { HistoryEntryStatusSchema } from "@/contracts/history";
@@ -7,43 +7,28 @@ import { MetricsSchema } from "@/contracts/metrics";
 import { RulesConfigSchema, RulesConfigVersionSchema } from "@/contracts/rules-config";
 import pkg from "../../../../package.json";
 
-type Json = Record<string, unknown>;
-type Operation = Json & { operationId: string };
-type PathItem = Partial<Record<"get" | "post" | "put", Operation>>;
-type OpenApiDocument = {
-  openapi: "3.1.0";
-  info: Json;
-  tags: Json[];
-  paths: Record<string, PathItem>;
-  components: { schemas: Record<string, Json> };
-};
-
 // Zod emits JSON Schema 2020-12, which is what OpenAPI 3.1 uses; only the $schema key must go.
-function toSchema(schema: z.ZodType, io: "input" | "output"): Json {
+function toSchema(schema: z.ZodType, io: "input" | "output") {
   const { $schema: _dropped, ...rest } = z.toJSONSchema(schema, {
-    target: "draft-2020-12",
     io,
     unrepresentable: "any",
   });
   return rest;
 }
 
-const ref = (name: string): Json => ({ $ref: `#/components/schemas/${name}` });
-const jsonBody = (name: string): Json => ({
+const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` });
+const jsonBody = (name: string) => ({
   content: { "application/json": { schema: ref(name) } },
 });
-const jsonArrayBody = (name: string): Json => ({
-  content: { "application/json": { schema: { type: "array", items: ref(name) } } },
-});
 
-function errorResponse(description: string, codes: readonly string[]): Json {
+function errorResponse(description: string, codes: readonly string[]) {
   return {
     description: `${description} Códigos: ${codes.join(", ")}.`,
     ...jsonBody("ApiError"),
   };
 }
 
-const idParameter = (description: string): Json => ({
+const idParameter = (description: string) => ({
   name: "id",
   in: "path",
   required: true,
@@ -52,17 +37,8 @@ const idParameter = (description: string): Json => ({
 });
 
 const NOT_FOUND = errorResponse("No existe.", ["NOT_FOUND"]);
-const FILE_CONTENT_TYPES = [
-  "application/pdf",
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "image/gif",
-  "text/plain",
-];
 
-// Approvals (POST /api/approvals/{decisionId}) are not built yet; when added they are `x-human-only`.
-const PATHS: Record<string, PathItem> = {
+const PATHS = {
   "/api/health": {
     get: {
       operationId: "getHealth",
@@ -129,16 +105,15 @@ const PATHS: Record<string, PathItem> = {
       tags: ["invoices"],
       summary: "Archivo original de la factura",
       description: "Úsalo para mostrar o descargar el archivo exactamente como llegó.",
-      parameters: [idParameter("Identificador de la decisión o factura.")],
+      parameters: [
+        idParameter(
+          "Identificador de la factura (`invoice.id`, el campo `invoiceId` de la decisión).",
+        ),
+      ],
       responses: {
         "200": {
           description: "Bytes originales del archivo.",
-          content: Object.fromEntries(
-            FILE_CONTENT_TYPES.map((type) => [
-              type,
-              { schema: { type: "string", format: "binary" } },
-            ]),
-          ),
+          content: { "*/*": { schema: { type: "string", format: "binary" } } },
         },
         "404": NOT_FOUND,
       },
@@ -161,7 +136,12 @@ const PATHS: Record<string, PathItem> = {
         },
       ],
       responses: {
-        "200": { description: "Lista de decisiones.", ...jsonArrayBody("DecisionRecord") },
+        "200": {
+          description: "Lista de decisiones.",
+          content: {
+            "application/json": { schema: { type: "array", items: ref("DecisionRecord") } },
+          },
+        },
         "400": errorResponse("Filtro inválido.", ["INVALID_REQUEST"]),
       },
     },
@@ -229,9 +209,9 @@ const PATHS: Record<string, PathItem> = {
   },
 };
 
-export function buildOpenApiDocument(): OpenApiDocument {
+export function buildOpenApiDocument() {
   return {
-    openapi: "3.1.0",
+    openapi: "3.1.0" as const,
     info: {
       title: "Triple Firma API",
       version: pkg.version,
@@ -249,12 +229,8 @@ export function buildOpenApiDocument(): OpenApiDocument {
     paths: PATHS,
     components: {
       schemas: {
-        ApiError: {
-          ...toSchema(ApiErrorSchema, "output"),
-          description: `Cuerpo de todo error 4xx. Códigos: ${ApiErrorCodeSchema.options.join(", ")}.`,
-        },
+        ApiError: toSchema(ApiErrorSchema, "output"),
         DecisionRecord: toSchema(DecisionRecordSchema, "output"),
-        RulesConfig: toSchema(RulesConfigSchema, "output"),
         RulesConfigInput: toSchema(RulesConfigSchema, "input"),
         RulesConfigVersion: toSchema(RulesConfigVersionSchema, "output"),
         Metrics: toSchema(MetricsSchema, "output"),
