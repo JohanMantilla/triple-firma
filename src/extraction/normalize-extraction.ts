@@ -190,6 +190,16 @@ function buildField<T>(
   };
 }
 
+// The reader copies each item and the code adds them up, so the LLM never does arithmetic. One
+// unreadable item leaves the sum unknown (null) rather than a partial total.
+function sumLineItems(amountStrings: readonly string[]): number | null {
+  if (amountStrings.length === 0) return null;
+  const amounts = amountStrings.map(normalizeAmount);
+  if (amounts.some((amount) => amount === null)) return null;
+  const sum = amounts.reduce<number>((total, amount) => total + (amount ?? 0), 0);
+  return Number.isSafeInteger(sum) ? sum : null;
+}
+
 export function normalizeExtraction(response: ReaderResponse): Extraction {
   const {
     payee,
@@ -198,11 +208,9 @@ export function normalizeExtraction(response: ReaderResponse): Extraction {
     issueDateString,
     dueDateString,
     reference,
-    lineItemsSumString,
+    lineItemAmountStrings,
   } = response;
-  const lineItemsSumMinor = lineItemsSumString?.raw
-    ? normalizeAmount(lineItemsSumString.raw)
-    : null;
+  const lineItemsSumMinor = sumLineItems(lineItemAmountStrings);
 
   return {
     payee: buildField(payee, PayeeNameSchema, payee.value?.trim()),

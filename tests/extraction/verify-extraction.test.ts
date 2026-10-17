@@ -21,7 +21,7 @@ const SECOND_READ: ReaderResponse = {
   issueDateString: readerField("Oct 1, 2026", "2026-10-01"),
   dueDateString: readerField("Oct 30, 2026", "2026-10-30"),
   reference: readerField("INV-102"),
-  lineItemsSumString: null,
+  lineItemAmountStrings: [],
   suspiciousText: [],
 };
 
