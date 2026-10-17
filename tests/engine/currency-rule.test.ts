@@ -59,6 +59,17 @@ describe("evaluateCurrencyRule (R8)", () => {
     });
   });
 
+  it("names the configured base currency in its messages", () => {
+    const config = {
+      baseCurrency: "COP" as const,
+      exchangeRates: { COP: "1", MXN: "0.0046" },
+      agreements: [],
+    };
+    expect(evaluate({ amountMinor: 1_000_000, currency: "MXN" }, config).message).toBe(
+      "R8: MXN convertido con la tasa fija 0.0046 por COP: COP 2.173.913,04.",
+    );
+  });
+
   it("escalates a supported currency without a configured rate", () => {
     const result = evaluate({ currency: "MXN" }, { exchangeRates: { USD: "1", COP: "4000" } });
     expect(result).toMatchObject({

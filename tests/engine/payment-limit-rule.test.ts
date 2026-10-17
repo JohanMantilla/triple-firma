@@ -51,6 +51,34 @@ describe("evaluatePaymentLimitRule (R5)", () => {
     });
   });
 
+  it("passes exactly the threshold when the hard cap is off", () => {
+    expect(evaluate(200_000, { hardCapMinor: null }).outcome).toBe("PASS");
+  });
+
+  it("passes an amount that converts to zero, which is negligible by decision 3", () => {
+    expect(evaluate(1, {}, "COP")).toMatchObject({
+      outcome: "PASS",
+      compared: { baseAmountMinor: 0 },
+      message: "R5: USD 0,00 no supera el umbral de aprobación de USD 2.000,00.",
+    });
+  });
+
+  it("names the configured base currency in its messages", () => {
+    const config = {
+      baseCurrency: "COP" as const,
+      exchangeRates: { COP: "1" },
+      agreements: [],
+      approvalThresholdMinor: 800_000_000,
+      hardCapMinor: null,
+    };
+    expect(evaluate(800_000_001, config, "COP").message).toBe(
+      "R5: COP 8.000.000,01 supera el umbral de aprobación de COP 8.000.000,00.",
+    );
+    expect(evaluate(null, config, "COP").message).toBe(
+      "R5: no se pudo calcular el monto en COP para compararlo con los límites; se escala por seguridad.",
+    );
+  });
+
   it("only escalates a huge amount when the hard cap is off", () => {
     expect(evaluate(50_000_000, { hardCapMinor: null }).outcome).toBe("ESCALATE");
   });

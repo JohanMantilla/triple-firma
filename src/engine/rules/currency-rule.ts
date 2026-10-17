@@ -1,5 +1,5 @@
 import type { RuleResult } from "@/contracts/decision";
-import { isSupportedCurrency } from "@/contracts/money";
+import { isSupportedCurrency, SUPPORTED_CURRENCIES } from "@/contracts/money";
 import { formatMoney } from "../format-money";
 import { MESSAGES } from "../messages";
 import type { RuleContext } from "../rule-context";
@@ -21,7 +21,8 @@ export function evaluateCurrencyRule(ctx: RuleContext): RuleResult {
   });
 
   if (currency === null || currencyField.isUncertain) return escalate(MESSAGES.currency.unreadable);
-  if (!isSupportedCurrency(currency)) return escalate(MESSAGES.currency.unsupported(currency));
+  if (!isSupportedCurrency(currency))
+    return escalate(MESSAGES.currency.unsupported(currency, SUPPORTED_CURRENCIES));
   if (configuredRate === undefined) return escalate(MESSAGES.currency.withoutRate(currency));
 
   const isAmountReadable = amountField.value !== null && !amountField.isUncertain;
@@ -34,10 +35,11 @@ export function evaluateCurrencyRule(ctx: RuleContext): RuleResult {
     outcome: "PASS",
     message:
       baseAmountMinor === null
-        ? MESSAGES.currency.supported(currency, configuredRate)
+        ? MESSAGES.currency.supported(currency, configuredRate, config.baseCurrency)
         : MESSAGES.currency.converted(
             currency,
             configuredRate,
+            config.baseCurrency,
             formatMoney(baseAmountMinor, config.baseCurrency),
           ),
     compared,

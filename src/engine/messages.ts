@@ -28,8 +28,8 @@ export const MESSAGES = {
   },
 
   paymentLimit: {
-    missingBaseAmount:
-      "R5: no se pudo calcular el monto en USD para compararlo con los límites; se escala por seguridad.",
+    missingBaseAmount: (baseCurrency: string) =>
+      `R5: no se pudo calcular el monto en ${baseCurrency} para compararlo con los límites; se escala por seguridad.`,
     overHardCap: (amount: string, hardCap: string) =>
       `R5: ${amount} supera el tope absoluto de ${hardCap}; no se puede aprobar.`,
     overThreshold: (amount: string, threshold: string) =>
@@ -40,16 +40,16 @@ export const MESSAGES = {
 
   currency: {
     unreadable: "R8: no se pudo determinar la moneda con certeza; se escala por seguridad.",
-    unsupported: (currency: string) =>
-      `R8: la moneda ${currency} no está soportada (solo USD, COP, MXN y ARS).`,
+    unsupported: (currency: string, supported: readonly string[]) =>
+      `R8: la moneda ${currency} no está soportada (solo ${listInSpanish(supported)}).`,
     withoutRate: (currency: string) =>
       `R8: la moneda ${currency} no tiene una tasa de cambio configurada.`,
     conversionFailed: (currency: string) =>
       `R8: no se pudo convertir el monto en ${currency}; se escala por seguridad.`,
-    supported: (currency: string, rate: string) =>
-      `R8: la moneda ${currency} está soportada, con tasa fija ${rate} por USD.`,
-    converted: (currency: string, rate: string, baseAmount: string) =>
-      `R8: ${currency} convertido con la tasa fija ${rate} por USD: ${baseAmount}.`,
+    supported: (currency: string, rate: string, baseCurrency: string) =>
+      `R8: la moneda ${currency} está soportada, con tasa fija ${rate} por ${baseCurrency}.`,
+    converted: (currency: string, rate: string, baseCurrency: string, baseAmount: string) =>
+      `R8: ${currency} convertido con la tasa fija ${rate} por ${baseCurrency}: ${baseAmount}.`,
   },
 
   dueDate: {
@@ -64,3 +64,10 @@ export const MESSAGES = {
         : `R9: vence el ${dueDate}, dentro de ${daysUntilDue} días, dentro de la política.`,
   },
 };
+
+// "USD, COP, MXN y ARS"
+function listInSpanish(items: readonly string[]): string {
+  return items.length <= 1
+    ? items.join("")
+    : `${items.slice(0, -1).join(", ")} y ${items[items.length - 1]}`;
+}

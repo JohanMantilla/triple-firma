@@ -1,15 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { buildRuleContext, toLocalDate } from "@/engine/rule-context";
 import { evaluateDueDateRule } from "@/engine/rules/due-date-rule";
+import type { RulesConfig } from "@/contracts/rules-config";
 import { buildInvoice, buildRulesConfig } from "./fixtures";
 
 // Policy in the fixture config: up to 30 days overdue, up to 90 days ahead.
 // NOW is 2026-10-17T14:00:00Z, which is 2026-10-17 in America/New_York.
-function evaluate(dueDate: string | null, now = "2026-10-17T14:00:00Z", isUncertain = false) {
+function evaluate(
+  dueDate: string | null,
+  now = "2026-10-17T14:00:00Z",
+  isUncertain = false,
+  config: Partial<RulesConfig> = {},
+) {
   const invoice = buildInvoice();
   invoice.extraction.dueDate = { ...invoice.extraction.dueDate, value: dueDate, isUncertain };
   return evaluateDueDateRule(
-    buildRuleContext({ invoice, config: buildRulesConfig(), history: [], now }),
+    buildRuleContext({ invoice, config: buildRulesConfig(config), history: [], now }),
   );
 }
 
@@ -71,6 +77,18 @@ describe("evaluateDueDateRule (R9)", () => {
     });
   });
 
+  it("with a zero-day overdue policy, passes today and escalates yesterday", () => {
+    const strict = { dueDatePolicy: { maxDaysOverdue: 0, maxDaysAhead: 90 } };
+    expect(evaluate("2026-10-17", undefined, false, strict).outcome).toBe("PASS");
+    expect(evaluate("2026-10-16", undefined, false, strict).outcome).toBe("ESCALATE");
+  });
+
+  it("counts the days of a year below 100 correctly instead of reading it as 19xx", () => {
+    const result = evaluate("0050-01-01");
+    expect(result.outcome).toBe("ESCALATE");
+    expect(result.compared.daysUntilDue).toBeLessThan(-700_000);
+  });
+
   it("counts a leap day", () => {
     expect(evaluate("2028-03-01", "2028-02-28T14:00:00Z").compared).toMatchObject({
       daysUntilDue: 2,
@@ -83,6 +101,11 @@ describe("toLocalDate", () => {
     ["2026-10-31T02:00:00Z", "America/New_York", "2026-10-30"],
     ["2026-10-31T04:00:00Z", "America/New_York", "2026-10-31"],
     ["2026-10-31T02:00:00Z", "UTC", "2026-10-31"],
+    ["2026-10-30T18:29:00Z", "Asia/Kolkata", "2026-10-30"],
+    ["2026-10-30T18:30:00Z", "Asia/Kolkata", "2026-10-31"],
+    ["2026-10-30T09:59:00Z", "Pacific/Kiritimati", "2026-10-30"],
+    ["2026-10-30T10:00:00Z", "Pacific/Kiritimati", "2026-10-31"],
+    ["2026-10-31T10:59:00Z", "Pacific/Pago_Pago", "2026-10-30"],
   ])("puts %s in %s on %s", (isoUtc, timezone, expected) => {
     expect(toLocalDate(isoUtc, timezone)).toBe(expected);
   });

@@ -15,7 +15,7 @@ export function evaluatePaymentLimitRule(ctx: RuleContext): RuleResult {
     return {
       ruleId: "R5",
       outcome: "ESCALATE",
-      message: MESSAGES.paymentLimit.missingBaseAmount,
+      message: MESSAGES.paymentLimit.missingBaseAmount(baseCurrency),
       compared,
     };
   }

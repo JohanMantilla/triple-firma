@@ -44,7 +44,10 @@ function daysBetween(from: string, to: string): number {
   return (toUtcMidnight(to) - toUtcMidnight(from)) / MS_PER_DAY;
 }
 
+// setUTCFullYear, unlike Date.UTC, keeps years 0-99 as they are instead of mapping them to 1900-1999.
 function toUtcMidnight(isoDate: string): number {
   const [year, month, day] = isoDate.split("-").map(Number);
-  return Date.UTC(year, month - 1, day);
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  return date.getTime();
 }
