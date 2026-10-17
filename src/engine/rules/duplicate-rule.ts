@@ -57,14 +57,31 @@ export function evaluateDuplicateRule(ctx: RuleContext): RuleResult {
 // because the approver already saw it. A BLOCKED or REJECTED entry of the same file passes too, so a
 // retry can never make the original escalation impossible to approve.
 //
-// An unreadable payee is the exception: R2 could not compare it when the invoice was escalated, so
-// the approver never saw the match. A payable invoice with the same reference, amount and currency
+// Two exceptions, both matches the approver never saw. A near copy registered as payable after the
+// escalation (escalatedAt) did not exist when R2 reported its matches, so it blocks; one that existed
+// before was in that report. And an unreadable payee: R2 could not compare it when the invoice was
+// escalated. A payable invoice with the same reference, amount and currency
 // blocks it. An unreadable reference stays with the person: payee and amount alone match every fixed
 // monthly fee.
-export function checkDuplicateOnApproval(ctx: RuleContext): RuleResult {
+export function checkDuplicateOnApproval(ctx: RuleContext, escalatedAt: string): RuleResult {
   const payable = ctx.history.filter((entry) => entry.status === "PAYABLE");
   const comparison = compareWithHistory(ctx, payable);
   if (comparison.outcome === "BLOCK") return comparison;
+  const paidSince = payable.filter(
+    (entry) => Date.parse(entry.decidedAt) > Date.parse(escalatedAt),
+  );
+  const unseen = compareWithHistory(ctx, paidSince);
+  if (unseen.compared.matchType === "NEAR") {
+    const entry = paidSince.find(({ invoiceId }) => invoiceId === unseen.compared.matchedInvoiceId);
+    return {
+      ...unseen,
+      outcome: "BLOCK",
+      message: MESSAGES.duplicate.nearPaidAfterEscalation(
+        entry?.reference ?? null,
+        entry === undefined ? "" : toLocalDate(entry.decidedAt, ctx.config.timezone),
+      ),
+    };
+  }
   const paidCopy = findPaidCopyWithoutPayee(ctx, payable);
   if (paidCopy !== undefined) {
     const { amountMinor, currency } = ctx.invoice.extraction;

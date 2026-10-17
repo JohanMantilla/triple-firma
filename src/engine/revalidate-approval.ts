@@ -60,7 +60,7 @@ export function revalidateApproval(input: RevalidateApprovalInput): Approval {
 
   const approvalCtx = withDecisionMoney(ctx, decision);
   const revalidationResults = [
-    runRevalidation("R2", () => checkDuplicateOnApproval(approvalCtx)),
+    runRevalidation("R2", () => checkDuplicateOnApproval(approvalCtx, decision.decidedAt)),
     runRevalidation("R6", () => checkBudget(approvalCtx, { isApproval: true })),
   ];
   const isPaying = revalidationResults.every((result) => result.outcome === "PASS");

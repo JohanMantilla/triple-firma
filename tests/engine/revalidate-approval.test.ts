@@ -153,6 +153,27 @@ describe("revalidateApproval", () => {
       });
     });
 
+    it.each([
+      ["a near copy with another reference format", { reference: "INV-0102" }],
+      ["a copy whose payee could not be read", { reference: "INV-102", payee: null }],
+    ])("blocks %s paid after this escalation, which the approver never saw", (_case, overrides) => {
+      // Escalated on 2026-10-10; the copy was approved and paid on 2026-10-12.
+      const paidLater = buildHistoryEntry({
+        invoiceId: "inv-0",
+        amountMinor: 250_000,
+        baseAmountMinor: 250_000,
+        decidedAt: "2026-10-12T14:00:00Z",
+        ...overrides,
+      });
+      const approval = resolve({ history: [pendingEntry(), paidLater] });
+      expect(approval.resultingOutcome).toBe("BLOCK");
+      expect(approval.revalidationResults[0]).toMatchObject({
+        ruleId: "R2",
+        outcome: "BLOCK",
+        compared: { matchType: "NEAR", matchedInvoiceId: "inv-0" },
+      });
+    });
+
     it("does not let other pending escalations block it: the approver chooses among them", () => {
       const otherPending = buildHistoryEntry({
         invoiceId: "inv-p",

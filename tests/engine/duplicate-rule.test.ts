@@ -465,9 +465,13 @@ describe("evaluateDuplicateRule (R2)", () => {
 });
 
 describe("checkDuplicateOnApproval (R2 at approval)", () => {
+  // The escalation being approved was decided on 2026-10-10; the fixture past invoices on 2026-10-03.
+  const ESCALATED_AT = "2026-10-10T14:00:00Z";
+
   function approve(history: HistoryEntry[]) {
     return checkDuplicateOnApproval(
       buildRuleContext({ invoice: buildInvoice(), config: buildRulesConfig(), history, now: NOW }),
+      ESCALATED_AT,
     );
   }
 
@@ -555,6 +559,7 @@ describe("checkDuplicateOnApproval (R2 at approval)", () => {
       invoice.extraction.payee = { ...invoice.extraction.payee, value: null, isUncertain: true };
       return checkDuplicateOnApproval(
         buildRuleContext({ invoice, config: buildRulesConfig(), history, now: NOW }),
+        ESCALATED_AT,
       );
     }
 
@@ -595,6 +600,38 @@ describe("checkDuplicateOnApproval (R2 at approval)", () => {
       ],
     ])("passes %s", (_case, overrides) => {
       expect(approveWithoutPayee([itself, past(overrides)]).outcome).toBe("PASS");
+    });
+  });
+
+  describe("near copies registered as payable after the escalation", () => {
+    const paidLater = (overrides: Partial<HistoryEntry>) =>
+      past({ invoiceId: "inv-0", decidedAt: "2026-10-12T14:00:00Z", ...overrides });
+
+    it("blocks a near copy that the approver never saw", () => {
+      expect(approve([itself, paidLater({ reference: "INV-0102" })])).toMatchObject({
+        outcome: "BLOCK",
+        message:
+          "R2: posible duplicado de la factura “INV-0102”, registrada como pagable el 2026-10-12, después de esta escalada, así que quien aprueba no la vio; no se puede aprobar.",
+        compared: { matchType: "NEAR", matchedInvoiceId: "inv-0", matchedStatus: "PAYABLE" },
+      });
+    });
+
+    it("blocks a copy paid later whose payee could not be read", () => {
+      expect(approve([itself, paidLater({ reference: "INV-102", payee: null })])).toMatchObject({
+        outcome: "BLOCK",
+        compared: { matchType: "NEAR" },
+      });
+    });
+
+    it.each([
+      [
+        "the same near copy paid before the escalation, which R2 reported",
+        { reference: "INV-0102", decidedAt: "2026-10-09T14:00:00Z" },
+      ],
+      ["a later payable invoice whose reference could not be read", { reference: null }],
+      ["a later payable invoice with another reference", { reference: "INV-555" }],
+    ])("passes %s", (_case, overrides) => {
+      expect(approve([itself, paidLater(overrides)]).outcome).toBe("PASS");
     });
   });
 
