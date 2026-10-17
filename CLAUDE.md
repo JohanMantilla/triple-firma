@@ -48,7 +48,7 @@ Next.js 16 has breaking changes versus older versions: read the guides in `node_
 5. **The extractor never receives rules, limits or payment history.**
 6. **Money in integer minor units** (`amountMinor`, cents for every supported currency). Never `float` or `parseFloat` for amounts. Each invoice is converted to the base currency **once**, with the fixed configured rate, exact integer arithmetic (`BigInt`) and a **single half-up rounding to the cent**; the result is stored as `baseAmountMinor` with the `exchangeRate` used. Limits and budget compare and sum only `baseAmountMinor`. Exceeding a threshold means strictly greater (USD 2,000.00 passes, 2,000.01 escalates).
 7. **Dates in ISO 8601.** Stored timestamps are always UTC (`...Z`); the `period` (`"2026-10"`) is computed in the configured `timezone`. `now` is injected; never `new Date()` or `Date.now()` inside `src/engine/`.
-8. **Approving an escalation revalidates** duplicates (R2) and budget (R6) at that moment.
+8. **Approving an escalation revalidates** duplicates (R2) and budget (R6) at that moment. At approval, R6 counts only `PAYABLE` entries of the current period (other pending escalations do not block it: the approver is choosing among them), so approvals never deadlock and the budget is never exceeded.
 9. **Audit log is append-only**, with a hash chain over canonical JSON.
 10. **Scope:** never present anything as fraud detection, compliance or identity verification. Near-duplicates or similar names are reported as "requires human review".
 

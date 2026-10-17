@@ -95,13 +95,13 @@ Configuración editable desde la pantalla. **Una regla sin configurar nunca pasa
 | | Coincidencia aproximada ("Corp" vs "Corp.", Unicode parecido) | ESCALAR | "El nombre se parece a 'Dev Partners SAS' pero no es idéntico." |
 | | No está en la lista | ESCALAR | "Beneficiario nuevo: no está en la lista permitida." |
 | | Marcado como bloqueado | FRENAR | |
-| **R4 Conforme a lo acordado** | Monto, moneda o vigencia no coinciden con el acuerdo (tolerancia configurable, por defecto 0) | FRENAR | "Cobra USD 3.000; lo acordado es USD 2.500 mensuales." |
+| **R4 Conforme a lo acordado** | Monto, moneda o vigencia no coinciden con el acuerdo (tolerancia configurable en la **moneda del acuerdo**, por defecto 0) | FRENAR | "Cobra USD 3.000; lo acordado es USD 2.500 mensuales." |
 | | Sin acuerdo registrado | ESCALAR | |
 | **R5 Límite por pago** | Monto en USD > umbral de aprobación | ESCALAR | "USD 4.200 supera el umbral de aprobación de USD 2.000." |
 | | Monto en USD > tope absoluto (opcional; en la empresa ficticia, USD 10.000) | FRENAR | "USD 15.000 supera el tope absoluto de USD 10.000." |
 | **R6 Presupuesto del periodo** | Pagado + aprobado + este pago > presupuesto mensual | FRENAR | "Presupuesto de octubre: USD 18.400 usados de 20.000; este pago (USD 2.100) lo excede." |
 | | Solo se excede al sumar lo comprometido por escaladas pendientes | ESCALAR | "El presupuesto de octubre tiene USD 2.500 comprometidos por escaladas pendientes; este pago lo excedería." |
-| **R7 Fraccionamiento** | Suma al mismo beneficiario en N días > umbral, aunque cada pago esté por debajo | ESCALAR | |
+| **R7 Fraccionamiento** | Suma en USD al mismo beneficiario en `splitPaymentWindowDays` días > `approvalThresholdMinor`, aunque cada pago esté por debajo | ESCALAR | "Dev Partners SAS suma USD 2.600 en 7 días; supera el umbral de aprobación de USD 2.000." |
 | **R8 Moneda** | Moneda desconocida o ambigua (`$` sin país) | ESCALAR | |
 | | Conversión con tasa fija de la configuración: aritmética exacta y un solo redondeo al centavo (ver decisión 3) | — | |
 | **R9 Fechas** | Vencimiento inválido, ya vencido más de X días o a más de Y días en el futuro | ESCALAR | |
@@ -111,11 +111,11 @@ Configuración editable desde la pantalla. **Una regla sin configurar nunca pasa
 
 | # | Decisión | Qué se decidió | Cómo queda en los contratos |
 |---|---|---|---|
-| 1 | ¿Las escaladas pendientes reservan presupuesto? | **Sí** (control de compromisos, como en finanzas). Si lo **pagado o aprobado** más este pago excede el presupuesto → **FRENAR**. Si solo se excede al sumar las **escaladas pendientes** → **ESCALAR**, porque la pendiente aún podría rechazarse. Al aprobar se revalida siempre, así que en ningún orden hay fuga. | El historial incluye las escaladas con estado `PENDING_APPROVAL` |
+| 1 | ¿Las escaladas pendientes reservan presupuesto? | **Sí** (control de compromisos, como en finanzas). Si lo **pagado o aprobado** más este pago excede el presupuesto → **FRENAR**. Si solo se excede al sumar las **escaladas pendientes** → **ESCALAR**, porque la pendiente aún podría rechazarse. Al aprobar se revalida siempre, así que en ningún orden hay fuga. **Al aprobar, R6 cuenta solo lo pagable del periodo** (no las otras pendientes, porque quien aprueba está eligiendo entre ellas): así dos pendientes nunca se bloquean entre sí y el presupuesto tampoco se excede. | El historial incluye las escaladas con estado `PENDING_APPROVAL` |
 | 2 | ¿Cuántos umbrales tiene R5? | **Dos.** Umbral de aprobación: si el monto es **estrictamente mayor** → ESCALAR (USD 2.000,00 pasa; USD 2.000,01 escala). Tope absoluto **opcional**: si se supera → FRENAR, sin opción de aprobar. En la empresa ficticia el tope está encendido en **USD 10.000**. | `approvalThresholdMinor` y `hardCapMinor` (opcional, `null` = apagado) |
 | 3 | ¿Cómo se convierte la moneda? | **Como en contabilidad:** cada factura se convierte a USD **una sola vez**, con la tasa fija de la configuración, aritmética exacta de enteros (`BigInt`) y **un único redondeo al centavo** (mitad hacia arriba). Ese monto en USD queda registrado junto con la tasa usada, y todas las comparaciones y sumas se hacen en **centavos enteros de USD**. Nunca hay fracciones de centavo que escalen una factura por error, y lo que se compara es exactamente lo que se muestra. | Tasas como **texto decimal** en unidades por 1 USD (`"4000"`, `"18.50"`, `"1"`). Cada decisión y cada entrada del historial guardan `amountMinor`, `currency`, `exchangeRate` y `baseAmountMinor` (USD en centavos). |
 | 4 | Zona horaria del periodo | `America/New_York`, configurable | `timezone` en la configuración |
-| 5 | R4: la factura no cuadra con lo acordado | Cobra **más** de lo acordado → FRENAR. Cobra **menos** → ESCALAR. | `toleranceMinor` (por defecto 0) |
+| 5 | R4: la factura no cuadra con lo acordado | Cobra **más** de lo acordado → FRENAR. Cobra **menos** → ESCALAR. La tolerancia se aplica en la moneda del acuerdo, antes de convertir. | `toleranceMinor` (en la moneda del acuerdo; por defecto 0) |
 | — | ¿Umbral distinto según la prioridad del proveedor? | **No en este hackatón.** Umbral único (ver abajo). | — |
 
 **Reglas generales del dinero:** enteros en unidades menores, nunca `float` ni `parseFloat`. Una moneda sin tasa configurada → ESCALAR (R8). Las tasas son fijas en la configuración: la conversión es exacta respecto a esa tasa, y así cada decisión es reproducible.
@@ -426,7 +426,7 @@ Además de las buenas prácticas, **el repo tiene que leerse como si lo hubiera 
 
 ### La pantalla (3 vistas, P0)
 
-1. **Reglas:** formulario validado con Zod; una configuración inválida no se guarda; cada cambio crea una nueva versión.
+1. **Reglas:** formulario validado con Zod; una configuración inválida no se guarda; cada cambio crea una nueva versión. Al cambiar una tasa de cambio, la pantalla muestra la conversión resultante ("1 USD = 4.000 COP") y pide confirmación, para que un cero de más no pase inadvertido.
 2. **Decisiones:** filtro Pagó / Frenó / Pendiente. El detalle muestra el documento original, los datos extraídos con su evidencia, cada regla con ✅/⚠️/⛔ y sus valores, y la explicación.
 3. **Bandeja de aprobación:** ordenada por vencimiento (la más próxima primero), con Aprobar o Rechazar, comentario obligatorio y revalidación al aprobar.
 
