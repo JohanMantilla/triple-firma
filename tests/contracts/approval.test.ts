@@ -56,6 +56,7 @@ describe("ApprovalSchema", () => {
 
   it("rejects paying when revalidation failed", () => {
     const revalidationResults: RuleResult[] = [
+      PASSED_REVALIDATION[0],
       { ruleId: "R6", outcome: "BLOCK", message: "Ya no cabe en el presupuesto.", compared: {} },
     ];
     expect(ApprovalSchema.safeParse(buildApproval({ revalidationResults })).success).toBe(false);
@@ -67,8 +68,35 @@ describe("ApprovalSchema", () => {
     );
   });
 
+  it("rejects paying when a rule other than R2 and R6 was revalidated", () => {
+    const revalidationResults: RuleResult[] = [
+      { ruleId: "R1", outcome: "PASS", message: "Extracción completa.", compared: {} },
+    ];
+    expect(ApprovalSchema.safeParse(buildApproval({ revalidationResults })).success).toBe(false);
+  });
+
+  it.each([
+    ["only R2", [PASSED_REVALIDATION[0]]],
+    ["only R6", [PASSED_REVALIDATION[1]]],
+    ["R2 twice", [PASSED_REVALIDATION[0], PASSED_REVALIDATION[0]]],
+    ["an extra rule", [...PASSED_REVALIDATION, PASSED_REVALIDATION[0]]],
+  ])("rejects paying with %s revalidated", (_case, revalidationResults) => {
+    expect(ApprovalSchema.safeParse(buildApproval({ revalidationResults })).success).toBe(false);
+  });
+
+  it("rejects blocking an approval whose revalidation passed", () => {
+    expect(ApprovalSchema.safeParse(buildApproval({ resultingOutcome: "BLOCK" })).success).toBe(
+      false,
+    );
+  });
+
   it("rejects a rejection that pays", () => {
     expect(ApprovalSchema.safeParse(buildApproval({ action: "REJECT" })).success).toBe(false);
+  });
+
+  it("rejects a rejection that carries revalidation results", () => {
+    const approval = buildApproval({ action: "REJECT", resultingOutcome: "BLOCK" });
+    expect(ApprovalSchema.safeParse(approval).success).toBe(false);
   });
 
   it("accepts a rejection that blocks", () => {
