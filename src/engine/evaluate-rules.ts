@@ -10,13 +10,14 @@ import {
 import { explainDecision } from "./explain-decision";
 import { MESSAGES } from "./messages";
 import { buildRuleContext, type RuleContext, type RuleContextInput } from "./rule-context";
+import { evaluateExtractionRule } from "./rules/extraction-rule";
 
 export type RuleEvaluator = (ctx: RuleContext) => RuleResult;
 
 // One evaluator per rule. A record keyed by RuleId makes TypeScript refuse a missing rule.
 // Each placeholder is replaced by its real rule in its own PR; until then it escalates (fail-safe).
 const RULES: Record<RuleId, RuleEvaluator> = {
-  R1: notImplemented("R1"),
+  R1: evaluateExtractionRule,
   R2: notImplemented("R2"),
   R3: notImplemented("R3"),
   R4: notImplemented("R4"),
