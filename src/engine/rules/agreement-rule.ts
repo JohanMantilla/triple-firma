@@ -3,7 +3,7 @@ import { normalizePayee } from "@/contracts/payee";
 import type { Agreement } from "@/contracts/rules-config";
 import { formatMoney } from "../format-money";
 import { MESSAGES } from "../messages";
-import type { RuleContext } from "../rule-context";
+import { type RuleContext, toLocalDate } from "../rule-context";
 import { isDateSupported, isEvidenceInSource } from "./extraction-evidence";
 
 // R4: the invoice must match what was agreed with its payee (identical name). As in accounts payable,
@@ -55,13 +55,18 @@ export function evaluateAgreementRule(ctx: RuleContext): RuleResult {
   }
 
   const issuedOn = issueDate.value;
+  const today = toLocalDate(ctx.now, ctx.config.timezone);
+  if (issuedOn > today) {
+    return result("ESCALATE", MESSAGES.agreement.futureIssueDate(issuedOn, today));
+  }
+
   const agreement = payeeAgreements.find((candidate) => isInForce(candidate, issuedOn));
   if (agreement === undefined) {
-    const latest = latestAgreement(payeeAgreements);
-    Object.assign(compared, { validFrom: latest.validFrom, validUntil: latest.validUntil });
+    const closest = closestAgreement(payeeAgreements, issuedOn);
+    Object.assign(compared, { validFrom: closest.validFrom, validUntil: closest.validUntil });
     return result(
       "BLOCK",
-      MESSAGES.agreement.outOfForce(issuedOn, latest.payee, latest.validFrom, latest.validUntil),
+      MESSAGES.agreement.outOfForce(issuedOn, closest.payee, closest.validFrom, closest.validUntil),
     );
   }
   Object.assign(compared, {
@@ -112,8 +117,10 @@ function isInForce(agreement: Agreement, isoDate: string): boolean {
   );
 }
 
-function latestAgreement(agreements: readonly Agreement[]): Agreement {
-  return agreements.reduce((latest, candidate) =>
-    candidate.validFrom > latest.validFrom ? candidate : latest,
-  );
+// The agreement to name when none is in force: the first one if the invoice predates them all,
+// otherwise the last one that had already started (and ended) by the issue date.
+function closestAgreement(agreements: readonly Agreement[], isoDate: string): Agreement {
+  const byStart = [...agreements].sort((a, b) => a.validFrom.localeCompare(b.validFrom));
+  const started = byStart.filter((agreement) => agreement.validFrom <= isoDate);
+  return started.at(-1) ?? byStart[0];
 }

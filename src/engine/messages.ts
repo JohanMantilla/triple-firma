@@ -83,6 +83,8 @@ export const MESSAGES = {
       `R4: no hay un acuerdo registrado con ${quoteUntrusted(payee)}; requiere revisión humana.`,
     issueDateUnreadable:
       "R4: no se pudo leer con certeza la fecha de emisión para verificar la vigencia del acuerdo.",
+    futureIssueDate: (issueDate: string, today: string) =>
+      `R4: la fecha de emisión ${issueDate} es posterior a hoy (${today}); requiere revisión humana.`,
     outOfForce: (issueDate: string, payee: string, validFrom: string, validUntil: string | null) =>
       `R4: la factura se emitió el ${issueDate}, fuera de la vigencia del acuerdo con “${payee}” (${validFrom} a ${validUntil ?? "sin fecha de fin"}).`,
     currencyMismatch: (currency: string, payee: string, agreedCurrency: string) =>

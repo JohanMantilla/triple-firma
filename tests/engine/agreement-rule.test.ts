@@ -188,6 +188,65 @@ describe("evaluateAgreementRule (R4)", () => {
     expect(evaluate(mixed, { agreements }).outcome).toBe("ESCALATE");
   });
 
+  it("escalates an issue date after today, even with an open-ended agreement", () => {
+    const future = issuedOn("2027-02-01", "Date: Feb 1, 2027");
+    expect(evaluate(future)).toMatchObject({
+      outcome: "ESCALATE",
+      message:
+        "R4: la fecha de emisión 2027-02-01 es posterior a hoy (2026-10-17); requiere revisión humana.",
+    });
+  });
+
+  it("passes an invoice issued today", () => {
+    expect(evaluate(issuedOn("2026-10-17", "Date: Oct 17, 2026")).outcome).toBe("PASS");
+  });
+
+  it("blocks an invoice issued before an open-ended agreement started", () => {
+    const agreements = [{ ...AGREEMENT, validFrom: "2026-10-05" }];
+    expect(evaluate(undefined, { agreements })).toMatchObject({
+      outcome: "BLOCK",
+      compared: { validFrom: "2026-10-05", validUntil: null },
+    });
+  });
+
+  it("names the first agreement when the invoice predates them all", () => {
+    const agreements = [
+      { ...AGREEMENT, validFrom: "2026-10-05", validUntil: "2026-10-10" },
+      { ...AGREEMENT, validFrom: "2026-10-11" },
+    ];
+    expect(evaluate(undefined, { agreements }).message).toContain("(2026-10-05 a 2026-10-10)");
+  });
+
+  it("names the last ended agreement when the invoice falls in a gap between agreements", () => {
+    const agreements = [
+      { ...AGREEMENT, validFrom: "2026-01-01", validUntil: "2026-09-15" },
+      { ...AGREEMENT, validFrom: "2026-10-05" },
+    ];
+    expect(evaluate(undefined, { agreements }).message).toContain("(2026-01-01 a 2026-09-15)");
+  });
+
+  it("blocks an invoice issued outside the agreement even if its amount is unreadable", () => {
+    const agreements = [{ ...AGREEMENT, validUntil: "2026-06-30" }];
+    const unreadableAmount = (invoice: Invoice) => {
+      invoice.extraction.amountMinor = { ...invoice.extraction.amountMinor, value: null };
+    };
+    expect(evaluate(unreadableAmount, { agreements }).outcome).toBe("BLOCK");
+  });
+
+  it.each([
+    ["amountMinor", "Monto"],
+    ["currency", "Moneda"],
+  ] as const)("escalates a missing %s", (field, label) => {
+    const missing = (invoice: Invoice) => {
+      const extraction = invoice.extraction as Record<string, unknown>;
+      extraction[field] = { ...(extraction[field] as object), value: null };
+    };
+    expect(evaluate(missing)).toMatchObject({
+      outcome: "ESCALATE",
+      message: `R4: no se puede comparar con lo acordado porque no se pudo leer con certeza: ${label}.`,
+    });
+  });
+
   it("escalates an unreadable issue date", () => {
     const unreadable = (invoice: Invoice) => {
       invoice.extraction.issueDate = { raw: null, value: null, evidence: null, isUncertain: true };
