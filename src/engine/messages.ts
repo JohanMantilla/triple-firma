@@ -121,6 +121,8 @@ export const MESSAGES = {
   budget: {
     missingBaseAmount: (baseCurrency: string) =>
       `R6: no se pudo calcular el monto en ${baseCurrency} para compararlo con el presupuesto; se escala por seguridad.`,
+    missingBaseAmountOnApproval: (baseCurrency: string) =>
+      `R6: no se puede aprobar: la decisión no tiene monto en ${baseCurrency} para compararlo con el presupuesto.`,
     overBudget: (period: string, committed: string, budget: string, amount: string) =>
       `R6: presupuesto de ${period}: ${committed} comprometidos de ${budget}; este pago (${amount}) lo excede.`,
     overWithReserved: (
