@@ -99,7 +99,9 @@ npm test
 
 | Comando             | Qué hace                                                |
 | ------------------- | ------------------------------------------------------- |
-| `npm run dev`       | Servidor de desarrollo                                  |
+| `npm run dev`       | Backend (:3000) y frontend Vite (:5173) a la vez        |
+| `npm run dev:api`   | Solo el backend                                         |
+| `npm run build:web` | Compila el frontend Vite a `frontend/dist`              |
 | `npm run lint`      | ESLint, incluida la regla de dependencias entre módulos |
 | `npm run typecheck` | Revisión de tipos de TypeScript                         |
 | `npm test`          | Pruebas con Vitest                                      |

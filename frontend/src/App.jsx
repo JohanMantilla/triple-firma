@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { loadInvoices, loadRules, resolveApproval, saveRules as saveRulesApi, uploadInvoice } from './api';
 import {
   Activity, ArrowDownRight, ArrowUpRight, Bell, BrainCircuit, Building2,
   Check, CheckCircle2, ChevronDown, CircleHelp, Clock3, FileCheck2,
@@ -17,49 +18,9 @@ const initialRules = {
   blockUnknownVendors: true
 };
 
-const seedInvoices = [
-  { id:'INV-1042', vendor:'Acme Software Inc.', initials:'AS', category:'Software', amount:4800, currency:'USD', due:'2026-10-20', date:'2026-10-14', beneficiary:'Acme Software Inc.', description:'Annual workspace subscription', duplicate:false },
-  { id:'INV-1041', vendor:'Northstar Cloud', initials:'NC', category:'Cloud services', amount:1240, currency:'USD', due:'2026-10-21', date:'2026-10-14', beneficiary:'Northstar Cloud', description:'Cloud infrastructure — October', duplicate:false },
-  { id:'INV-1040', vendor:'Linear Labs', initials:'LL', category:'Software', amount:890, currency:'USD', due:'2026-10-24', date:'2026-10-13', beneficiary:'Linear Labs', description:'Product team software licenses', duplicate:false },
-  { id:'INV-1039', vendor:'Unknown Vendor LLC', initials:'UV', category:'Consulting', amount:720, currency:'USD', due:'2026-10-19', date:'2026-10-13', beneficiary:'Unknown Vendor LLC', description:'Consulting services', duplicate:false },
-  { id:'INV-1038', vendor:'Atlas Office', initials:'AO', category:'Operations', amount:2350, currency:'USD', due:'2026-10-22', date:'2026-10-12', beneficiary:'Atlas Office', description:'Office equipment and supplies', duplicate:false },
-  { id:'INV-1037', vendor:'Northstar Cloud', initials:'NC', category:'Cloud services', amount:1240, currency:'USD', due:'2026-10-21', date:'2026-10-14', beneficiary:'Northstar Cloud', description:'Cloud infrastructure — October', duplicate:true }
-];
-
 const money = (amount, currency = 'USD') => new Intl.NumberFormat('en-US', {
   style:'currency', currency, maximumFractionDigits:2
 }).format(amount);
-
-function evaluateInvoice(invoice, rules) {
-  const allowed = rules.allowedVendors.split(',').map(v => v.trim().toLowerCase()).filter(Boolean);
-  const reasons = [];
-  const checks = [];
-  if (invoice.duplicate && rules.blockDuplicates) {
-    reasons.push('Posible factura duplicada: coincide el proveedor y el importe con otro registro.');
-    checks.push({ label:'Detección de duplicados', status:'fail', detail:'Se encontró una coincidencia en el conjunto de facturas.' });
-  } else checks.push({ label:'Detección de duplicados', status:'pass', detail:'No se detectaron duplicados.' });
-
-  const vendorAllowed = allowed.includes(invoice.beneficiary.toLowerCase());
-  if (!vendorAllowed && rules.blockUnknownVendors) {
-    reasons.push('El beneficiario no está incluido en la lista de proveedores permitidos.');
-    checks.push({ label:'Proveedor permitido', status:'fail', detail:'El beneficiario no aparece en la lista configurada.' });
-  } else checks.push({ label:'Proveedor permitido', status:'pass', detail: vendorAllowed ? 'El beneficiario está permitido.' : 'La regla de proveedores desconocidos está desactivada.' });
-
-  if (invoice.amount > rules.maxPerInvoice) {
-    reasons.push(`El importe supera el límite por factura de ${money(rules.maxPerInvoice)}.`);
-    checks.push({ label:'Límite por factura', status:'fail', detail:`Factura: ${money(invoice.amount)} · Límite: ${money(rules.maxPerInvoice)}.` });
-  } else checks.push({ label:'Límite por factura', status:'pass', detail:`El importe está dentro del límite de ${money(rules.maxPerInvoice)}.` });
-
-  if (invoice.amount > rules.requireApprovalAbove) {
-    reasons.push(`El importe supera el umbral de aprobación humana de ${money(rules.requireApprovalAbove)}.`);
-    checks.push({ label:'Aprobación humana', status:'review', detail:`Se requiere revisión para importes superiores a ${money(rules.requireApprovalAbove)}.` });
-  } else checks.push({ label:'Aprobación humana', status:'pass', detail:'No se requiere aprobación adicional por importe.' });
-
-  const decision = checks.some(c => c.status === 'fail') ? 'blocked'
-    : checks.some(c => c.status === 'review') ? 'approval' : 'pay';
-  const reason = reasons[0] || 'Cumple las reglas configuradas. Se puede registrar como pago simulado.';
-  return { decision, reasons, reason, checks };
-}
 
 const statusMeta = {
   pay: { label:'Pago simulado', className:'paid', icon:CheckCircle2 },
@@ -85,22 +46,24 @@ function MetricCard({ icon:Icon, label, value, note, tone='blue', trend }) {
 
 function App() {
   const [page, setPage] = useState('Dashboard');
-  const [invoices, setInvoices] = useState(() => seedInvoices.map(i => ({ ...i, ...evaluateInvoice(i, initialRules), finalStatus:null })));
+  const [invoices, setInvoices] = useState([]);
+  const [config, setConfig] = useState(null);
   const [rules, setRules] = useState(initialRules);
-  const [selectedId, setSelectedId] = useState('INV-1042');
+  const [selectedId, setSelectedId] = useState(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
   const [toast, setToast] = useState('');
   const [mobileNav, setMobileNav] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
-  const [newVendor, setNewVendor] = useState('');
-  const [newAmount, setNewAmount] = useState('650');
-  const [newBeneficiary, setNewBeneficiary] = useState('');
-  const [audit, setAudit] = useState([
-    { time:'10:42:18', title:'Factura INV-1042 analizada', detail:'El agente detectó que supera el límite por factura.', kind:'warning' },
-    { time:'10:41:02', title:'Reglas de pago cargadas', detail:'Se aplicaron las reglas de la empresa · versión 1.0.', kind:'info' },
-    { time:'10:38:46', title:'Factura INV-1041 evaluada', detail:'Cumple las reglas y queda elegible para pago simulado.', kind:'success' }
-  ]);
+  const [newFile, setNewFile] = useState(null);
+  const [audit, setAudit] = useState([]);
+
+  const refresh = () => loadInvoices().then(setInvoices);
+  useEffect(() => {
+    Promise.all([loadInvoices(), loadRules()])
+      .then(([list, loaded]) => { setInvoices(list); setRules(loaded.rules); setConfig(loaded.config); })
+      .catch(e => notify(`No se pudo conectar con el backend: ${e.message}`));
+  }, []);
 
   const activeInvoice = invoices.find(i => i.id === selectedId) || invoices[0];
   const currentStatus = i => i.finalStatus || i.decision;
@@ -122,42 +85,42 @@ function App() {
     return match && (filter === 'all' || status === filter);
   });
 
-  function rerunAgent() {
-    setInvoices(prev => prev.map(i => ({ ...i, ...evaluateInvoice(i, rules), finalStatus:null })));
-    addAudit('Agente ejecutado de nuevo', 'Todas las facturas fueron reevaluadas con las reglas actuales.', 'info');
-    notify('Agente ejecutado con las reglas actuales');
+  async function rerunAgent() {
+    await refresh().catch(e => notify(e.message));
+    addAudit('Decisiones recargadas', 'Se cargó el estado actual desde el backend.', 'info');
+    notify('Decisiones recargadas');
   }
-  function takeAction(invoice, action) {
-    const labels = { pay:'Pago simulado registrado', rejected:'Factura rechazada', approval:'Factura enviada a aprobación' };
-    setInvoices(prev => prev.map(i => i.id === invoice.id ? { ...i, finalStatus:action } : i));
-    addAudit(`${labels[action]} · ${invoice.id}`, `${invoice.vendor} · ${money(invoice.amount)}. Acción registrada por el usuario.`, action === 'pay' ? 'success' : action === 'rejected' ? 'danger' : 'warning');
-    notify(`${labels[action]} (sin mover dinero real)`);
+  async function takeAction(invoice, action) {
+    const comment = window.prompt(`Comentario para ${action === 'rejected' ? 'rechazar' : 'aprobar'} ${invoice.id} (obligatorio):`);
+    if (!comment?.trim()) return;
+    try {
+      const updated = await resolveApproval(invoice.decisionId, action === 'rejected' ? 'REJECT' : 'APPROVE', 'Nico Ledezma', comment);
+      setInvoices(prev => prev.map(i => i.decisionId === updated.decisionId ? updated : i));
+      addAudit(`${updated.decision === 'pay' ? 'Aprobada' : 'Resuelta'} · ${invoice.id}`, `${updated.vendor} · ${money(updated.amount)}. ${updated.reason}`, updated.decision === 'pay' ? 'success' : 'danger');
+      notify('Resolución registrada (sin mover dinero real)');
+    } catch (e) { notify(`Error: ${e.message}`); }
   }
-  function saveRules() {
-    setInvoices(prev => prev.map(i => ({ ...i, ...evaluateInvoice(i, rules), finalStatus:null })));
-    addAudit('Reglas actualizadas', `Límite: ${money(rules.maxPerInvoice)} · Umbral de aprobación: ${money(rules.requireApprovalAbove)}.`, 'info');
-    notify('Reglas guardadas y facturas reevaluadas');
-    setPage('Rules');
+  async function saveRules() {
+    try {
+      const saved = await saveRulesApi(rules, config);
+      setRules(saved.rules); setConfig(saved.config);
+      addAudit('Reglas actualizadas', 'Se guardó una nueva versión de reglas en el backend.', 'info');
+      notify('Reglas guardadas. Las nuevas facturas usarán esta versión.');
+      setPage('Reglas');
+    } catch (e) { notify(`Error: ${e.message}`); }
   }
-  function createInvoice(e) {
+  async function createInvoice(e) {
     e.preventDefault();
-    const name = newVendor.trim();
-    const amount = Number(newAmount);
-    if (!name || !Number.isFinite(amount) || amount <= 0) return notify('Introduce un proveedor y un importe válido');
-    const invoice = {
-      id:`INV-${1043 + invoices.length - seedInvoices.length}`, vendor:name,
-      initials:name.split(/\s+/).slice(0,2).map(s=>s[0]).join('').toUpperCase(),
-      category:'Nueva factura', amount, currency:'USD', due:'2026-10-30',
-      date:'2026-10-16', beneficiary:newBeneficiary.trim() || name,
-      description:'Factura de prueba creada durante la demo', duplicate:false
-    };
-    const evaluated = { ...invoice, ...evaluateInvoice(invoice, rules), finalStatus:null };
-    setInvoices(prev => [evaluated, ...prev]);
-    setSelectedId(invoice.id);
-    addAudit(`Nueva factura recibida · ${invoice.id}`, `${name} · ${money(amount)}. Evaluada con las reglas activas.`, 'info');
-    setShowAdd(false); setNewVendor(''); setNewAmount('650'); setNewBeneficiary('');
-    setPage('Invoices');
-    notify('Factura de prueba creada y evaluada');
+    if (!newFile) return;
+    try {
+      const invoice = await uploadInvoice(newFile);
+      await refresh();
+      setSelectedId(invoice.id);
+      addAudit(`Nueva factura recibida · ${invoice.id}`, `${invoice.vendor} · ${money(invoice.amount)}. Evaluada con las reglas activas.`, 'info');
+      setShowAdd(false); setNewFile(null);
+      setPage('Facturas');
+      notify('Factura evaluada');
+    } catch (err) { notify(`Error: ${err.message}`); }
   }
 
   const navItems = [
@@ -199,7 +162,7 @@ function App() {
     </main>
 
     {activeInvoice && <InvoiceDrawer invoice={activeInvoice} status={currentStatus(activeInvoice)} onClose={()=>setSelectedId(null)} onAction={takeAction} open={page==='Facturas' && Boolean(selectedId)} />}
-    {showAdd && <div className="modal-backdrop" onClick={()=>setShowAdd(false)}><form className="modal" onClick={e=>e.stopPropagation()} onSubmit={createInvoice}><div className="modal-head"><div><span className="eyebrow">SIMULACIÓN</span><h2>Agregar factura</h2></div><button type="button" className="icon-button" onClick={()=>setShowAdd(false)}><X size={18}/></button></div><p className="muted-copy">Crea una factura ficticia para probar las reglas del agente.</p><label>Nombre del proveedor<input autoFocus value={newVendor} onChange={e=>setNewVendor(e.target.value)} placeholder="Ej. Nova Design Studio" required/></label><label>Beneficiario<input value={newBeneficiary} onChange={e=>setNewBeneficiary(e.target.value)} placeholder="Por defecto, el nombre del proveedor"/></label><label>Importe en USD<input type="number" min="1" step="0.01" value={newAmount} onChange={e=>setNewAmount(e.target.value)} required/></label><div className="modal-actions"><button type="button" className="button secondary" onClick={()=>setShowAdd(false)}>Cancelar</button><button type="submit" className="button primary"><Plus size={16}/> Evaluar factura</button></div></form></div>}
+    {showAdd && <div className="modal-backdrop" onClick={()=>setShowAdd(false)}><form className="modal" onClick={e=>e.stopPropagation()} onSubmit={createInvoice}><div className="modal-head"><div><span className="eyebrow">SIMULACIÓN</span><h2>Agregar factura</h2></div><button type="button" className="icon-button" onClick={()=>setShowAdd(false)}><X size={18}/></button></div><p className="muted-copy">Sube un PDF, imagen, email o chat. El backend lo lee y aplica las reglas.</p><label>Archivo<input type="file" accept=".pdf,.png,.jpg,.jpeg,.eml,.txt" onChange={e=>setNewFile(e.target.files[0])} required/></label><div className="modal-actions"><button type="button" className="button secondary" onClick={()=>setShowAdd(false)}>Cancelar</button><button type="submit" className="button primary"><Plus size={16}/> Evaluar factura</button></div></form></div>}
     {toast && <div className="toast"><CheckCircle2 size={17}/>{toast}</div>}
   </div>;
 }
@@ -279,9 +242,8 @@ function AuditRow({ item }) {
 
 function InvoiceDrawer({ invoice, status, onClose, onAction, open }) {
   if (!invoice || !open) return null;
-  const evaluated = evaluateInvoice(invoice, initialRules);
   const current = invoice;
-  return <div className="drawer-backdrop" onClick={onClose}><aside className="invoice-drawer" onClick={e=>e.stopPropagation()}><div className="drawer-head"><div><span className="eyebrow">DETALLE DE FACTURA</span><h2>{current.id}</h2></div><button className="icon-button" onClick={onClose}><X size={18}/></button></div><div className="drawer-vendor"><div className="vendor-logo large-logo">{current.initials}</div><div><h3>{current.vendor}</h3><span>{current.category}</span></div></div><div className="drawer-amount"><span>Importe solicitado</span><strong>{money(current.amount)}</strong><span>Vencimiento: {current.due}</span></div><div className="drawer-status"><span>Decisión actual</span><StatusBadge status={status}/></div><section className="decision-explanation"><div className="decision-heading"><div className="decision-spark"><BrainCircuit size={17}/></div><div><strong>Explicación del agente</strong><span>Análisis basado en reglas</span></div></div><p>{current.finalStatus==='pay'?'Una persona registró la aprobación de esta simulación. No se ha ejecutado ningún pago real.':current.finalStatus==='rejected'?'Una persona rechazó esta factura en la demo.':current.reason}</p>{current.reasons?.length>0&&<ul>{current.reasons.map((r,i)=><li key={i}>{r}</li>)}</ul>}</section><section className="checks-section"><h4>Validaciones de reglas</h4>{(current.checks || evaluated.checks).map((c,i)=><div className="check-row" key={i}><span className={`check-icon ${c.status}`}>{c.status==='pass'?<Check size={13}/>:c.status==='fail'?<X size={13}/>:<Clock3 size={13}/>}</span><div><strong>{c.label}</strong><small>{c.detail}</small></div><span className={`check-status ${c.status}`}>{c.status==='pass'?'Cumple':c.status==='fail'?'Incumple':'Revisar'}</span></div>)}</section><div className="drawer-audit-note"><History size={15}/><span>La decisión y las acciones se registran en el historial de auditoría.</span></div><div className="drawer-actions">{status==='approval'&&<><button className="button secondary danger-text" onClick={()=>onAction(current,'rejected')}><X size={15}/> Rechazar</button><button className="button primary" onClick={()=>onAction(current,'pay')}><Check size={15}/> Aprobar simulación</button></>}{status==='pay'&&<button className="button secondary full-width" onClick={()=>onAction(current,'pay')}><CheckCircle2 size={15}/> Registrar pago simulado</button>}{status==='blocked'&&<div className="blocked-note"><ShieldAlert size={16}/> Bloqueada por una regla. Ajusta las reglas o los datos y vuelve a evaluar.</div>}{status==='rejected'&&<div className="blocked-note">Esta factura fue rechazada manualmente.</div>}</div></aside></div>;
+  return <div className="drawer-backdrop" onClick={onClose}><aside className="invoice-drawer" onClick={e=>e.stopPropagation()}><div className="drawer-head"><div><span className="eyebrow">DETALLE DE FACTURA</span><h2>{current.id}</h2></div><button className="icon-button" onClick={onClose}><X size={18}/></button></div><div className="drawer-vendor"><div className="vendor-logo large-logo">{current.initials}</div><div><h3>{current.vendor}</h3><span>{current.category}</span></div></div><div className="drawer-amount"><span>Importe solicitado</span><strong>{money(current.amount)}</strong><span>Vencimiento: {current.due}</span></div><div className="drawer-status"><span>Decisión actual</span><StatusBadge status={status}/></div><section className="decision-explanation"><div className="decision-heading"><div className="decision-spark"><BrainCircuit size={17}/></div><div><strong>Explicación del agente</strong><span>Análisis basado en reglas</span></div></div><p>{current.reason}</p>{current.reasons?.length>0&&<ul>{current.reasons.map((r,i)=><li key={i}>{r}</li>)}</ul>}</section><section className="checks-section"><h4>Validaciones de reglas</h4>{current.checks.map((c,i)=><div className="check-row" key={i}><span className={`check-icon ${c.status}`}>{c.status==='pass'?<Check size={13}/>:c.status==='fail'?<X size={13}/>:<Clock3 size={13}/>}</span><div><strong>{c.label}</strong><small>{c.detail}</small></div><span className={`check-status ${c.status}`}>{c.status==='pass'?'Cumple':c.status==='fail'?'Incumple':'Revisar'}</span></div>)}</section><div className="drawer-audit-note"><History size={15}/><span>La decisión y las acciones se registran en el historial de auditoría.</span></div><div className="drawer-actions">{status==='approval'&&<><button className="button secondary danger-text" onClick={()=>onAction(current,'rejected')}><X size={15}/> Rechazar</button><button className="button primary" onClick={()=>onAction(current,'pay')}><Check size={15}/> Aprobar simulación</button></>}{status==='blocked'&&<div className="blocked-note"><ShieldAlert size={16}/> Bloqueada por una regla. Ajusta las reglas o los datos y vuelve a evaluar.</div>}{status==='rejected'&&<div className="blocked-note">Esta factura fue rechazada manualmente.</div>}</div></aside></div>;
 }
 
 export default App;

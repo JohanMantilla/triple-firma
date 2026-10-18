@@ -51,3 +51,7 @@ desktop.ini
 
 # eval reports
 data/reports/
+
+# Vite frontend
+/frontend/node_modules
+/frontend/dist

@@ -104,7 +104,7 @@ const eslintConfig = defineConfig([
     [...internalModules("engine", "extraction", "lib", "components"), "@anthropic-ai/sdk"],
     "API routes go through pipeline/ or store/.",
   ),
-  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "prototypes/**"]),
+  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "frontend/**"]),
 ]);
 
 export default eslintConfig;

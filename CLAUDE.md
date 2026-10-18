@@ -23,7 +23,7 @@ No secrets are needed to start the UI: it uses mocks (`NEXT_PUBLIC_USE_MOCK_API=
 ## Commands
 
 ```bash
-npm run dev          # http://localhost:3000
+npm run dev          # backend http://localhost:3000, frontend (Vite, `frontend/`) http://localhost:5173
 npm run lint         # ESLint, including the dependency rule
 npm run typecheck    # next typegen + tsc --noEmit
 npm test             # Vitest (tests/**/*.test.ts)
