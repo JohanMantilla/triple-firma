@@ -72,6 +72,8 @@ export function buildExtraction(): Extraction {
       isUncertain: false,
     },
     lineItemsSumMinor: 250_000,
+    taxMinor: null,
+    lineItemAmountsMinor: null,
     suspiciousText: [],
   };
 }

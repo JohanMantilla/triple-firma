@@ -65,6 +65,47 @@ describe("ExtractionSchema", () => {
     ).toBe(false);
   });
 
+  it.each([
+    ["a tax amount", 47_500],
+    ["no tax", null],
+  ])("accepts %s", (_label, taxMinor) => {
+    expect(ExtractionSchema.safeParse({ ...buildExtraction(), taxMinor }).success).toBe(true);
+  });
+
+  it("accepts an extraction without taxMinor, from a reader that does not extract it yet", () => {
+    const { taxMinor: _taxMinor, ...extraction } = buildExtraction();
+    expect(ExtractionSchema.safeParse(extraction).success).toBe(true);
+  });
+
+  it.each([
+    ["the amount of each line item", [80_000_000, 20_000_000]],
+    ["no line item amounts", null],
+    ["a line whose amount could not be read, kept in its place", [80_000_000, null]],
+  ])("accepts %s", (_label, lineItemAmountsMinor) => {
+    expect(ExtractionSchema.safeParse({ ...buildExtraction(), lineItemAmountsMinor }).success).toBe(
+      true,
+    );
+  });
+
+  it("accepts an extraction without lineItemAmountsMinor, from a reader that does not read it yet", () => {
+    const { lineItemAmountsMinor: _lineItemAmountsMinor, ...extraction } = buildExtraction();
+    expect(ExtractionSchema.safeParse(extraction).success).toBe(true);
+  });
+
+  it.each([
+    ["a negative amount", [-1]],
+    ["a fraction of a cent", [1.5]],
+    ["more than 500 lines", Array.from({ length: 501 }, () => 100)],
+  ])("rejects line item amounts with %s", (_label, lineItemAmountsMinor) => {
+    expect(ExtractionSchema.safeParse({ ...buildExtraction(), lineItemAmountsMinor }).success).toBe(
+      false,
+    );
+  });
+
+  it.each([-1, 1.5])("rejects the tax amount %s", (taxMinor) => {
+    expect(ExtractionSchema.safeParse({ ...buildExtraction(), taxMinor }).success).toBe(false);
+  });
+
   it("rejects a payee made only of invisible characters", () => {
     const extraction = buildExtraction();
     extraction.payee = { ...extraction.payee, value: "\u200B \u200D" };
