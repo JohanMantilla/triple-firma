@@ -41,6 +41,7 @@ CREATE TRIGGER IF NOT EXISTS audit_entries_no_delete BEFORE DELETE ON audit_entr
 
 // Children first, so it also works with foreign keys enforced. Triggers are dropped with their table.
 export const DROP_SCHEMA = `
+DROP TABLE IF EXISTS audit_entries;
 DROP TABLE IF EXISTS approvals;
 DROP TABLE IF EXISTS decisions;
 DROP TABLE IF EXISTS invoices;

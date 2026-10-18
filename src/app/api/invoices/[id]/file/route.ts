@@ -32,6 +32,7 @@ export async function GET(
       "content-type": CONTENT_TYPES.get(extension) ?? "application/octet-stream",
       "content-disposition": `inline; filename*=UTF-8''${encodeURIComponent(path.basename(file.fileName))}`,
       "x-content-type-options": "nosniff",
+      "content-security-policy": "sandbox",
     },
   });
 }

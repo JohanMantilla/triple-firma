@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Client } from "@libsql/client";
-import { appendAuditEntry, canonicalJson, hashAuditEntry } from "@/store/audit-log";
+import {
+  appendAuditEntry,
+  canonicalJson,
+  hashAuditEntry,
+  verifyAuditChain,
+} from "@/store/audit-log";
 import { NOW } from "../engine/fixtures";
 import { countAuditEntries, openMemoryDb } from "./fixtures";
 
@@ -59,5 +64,83 @@ describe("canonicalJson", () => {
     expect(hashAuditEntry({ ...fields, payload: { a: 1, b: 2 } })).toBe(
       hashAuditEntry({ ...fields, payload: { b: 2, a: 1 } }),
     );
+  });
+});
+
+describe("verifyAuditChain", () => {
+  async function appendThree() {
+    const entries = [];
+    for (const n of [1, 2, 3]) {
+      entries.push(
+        await appendAuditEntry(
+          db,
+          "DECISION",
+          { decisionId: `decision-${n}`, outcome: "BLOCK" },
+          NOW,
+        ),
+      );
+    }
+    return entries;
+  }
+
+  // What someone with direct database access could do: drop the guards, then edit the log.
+  async function tamper(sql: string) {
+    await db.execute("DROP TRIGGER audit_entries_no_update");
+    await db.execute("DROP TRIGGER audit_entries_no_delete");
+    await db.execute(sql);
+  }
+
+  it("accepts an empty log", async () => {
+    expect(await verifyAuditChain(db)).toEqual({
+      isValid: true,
+      entryCount: 0,
+      firstInvalidSeq: null,
+      lastHash: null,
+    });
+  });
+
+  it("accepts an untouched log and returns its last hash", async () => {
+    const entries = await appendThree();
+    expect(await verifyAuditChain(db)).toEqual({
+      isValid: true,
+      entryCount: 3,
+      firstInvalidSeq: null,
+      lastHash: entries[2]?.hash,
+    });
+  });
+
+  it("accepts a payload that the schema normalizes, such as an own __proto__ key", async () => {
+    await appendAuditEntry(db, "DECISION", JSON.parse('{"__proto__":{"x":1},"a":1}'), NOW);
+    expect(await verifyAuditChain(db)).toMatchObject({ isValid: true, entryCount: 1 });
+  });
+
+  it("detects an edited payload at its position", async () => {
+    await appendThree();
+    await tamper(
+      "UPDATE audit_entries SET payload_json = json_set(payload_json, '$.outcome', 'PAY') WHERE seq = 2",
+    );
+    expect(await verifyAuditChain(db)).toMatchObject({ isValid: false, firstInvalidSeq: 2 });
+  });
+
+  it("detects an edited hash", async () => {
+    await appendThree();
+    await tamper(`UPDATE audit_entries SET hash = '${"0".repeat(64)}' WHERE seq = 2`);
+    expect(await verifyAuditChain(db)).toMatchObject({ isValid: false, firstInvalidSeq: 2 });
+  });
+
+  it("detects a deleted entry", async () => {
+    await appendThree();
+    await tamper("DELETE FROM audit_entries WHERE seq = 2");
+    expect(await verifyAuditChain(db)).toMatchObject({
+      isValid: false,
+      entryCount: 2,
+      firstInvalidSeq: 2,
+    });
+  });
+
+  it("reports a payload that is no longer JSON instead of failing", async () => {
+    await appendThree();
+    await tamper("UPDATE audit_entries SET payload_json = 'not json' WHERE seq = 3");
+    expect(await verifyAuditChain(db)).toMatchObject({ isValid: false, firstInvalidSeq: 3 });
   });
 });
