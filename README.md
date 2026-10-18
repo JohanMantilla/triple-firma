@@ -31,7 +31,7 @@ El objetivo es que el equipo financiero pueda consultar qué decidió el agente,
 - **Trazabilidad:** explicación de las decisiones para facilitar su revisión.
 - **Panel de control:** visualización del estado de las facturas y las decisiones del agente.
 
-*El alcance efectivo de cada funcionalidad depende de su nivel de implementación e integración en la versión actual del proyecto.*
+_El alcance efectivo de cada funcionalidad depende de su nivel de implementación e integración en la versión actual del proyecto._
 
 ## ¿Cómo funciona?
 
@@ -72,16 +72,16 @@ Decisión del sistema
 
 Triple Firma utiliza tecnologías modernas para construir una aplicación web con lógica de negocio validable y una interfaz orientada a la toma de decisiones.
 
-| Tecnología | Uso |
-|---|---|
-| Next.js | Framework de la aplicación web |
-| React | Construcción de la interfaz |
-| TypeScript | Tipado y mayor seguridad durante el desarrollo |
-| Tailwind CSS | Estilos y diseño de la interfaz |
-| Anthropic SDK | Integración con modelos de inteligencia artificial |
-| Zod | Validación de datos y estructuras |
-| LibSQL | Acceso a datos mediante una base de datos compatible |
-| Vitest | Pruebas automatizadas |
+| Tecnología    | Uso                                                  |
+| ------------- | ---------------------------------------------------- |
+| Next.js       | Framework de la aplicación web                       |
+| React         | Construcción de la interfaz                          |
+| TypeScript    | Tipado y mayor seguridad durante el desarrollo       |
+| Tailwind CSS  | Estilos y diseño de la interfaz                      |
+| Anthropic SDK | Integración con modelos de inteligencia artificial   |
+| Zod           | Validación de datos y estructuras                    |
+| LibSQL        | Acceso a datos mediante una base de datos compatible |
+| Vitest        | Pruebas automatizadas                                |
 
 ## Estructura del proyecto
 
@@ -174,7 +174,7 @@ Consulta `package.json` para verificar los scripts disponibles en la versión ac
 | `npm test`          | Pruebas con Vitest                                      |
 | `npm run format`    | Formatea el código con Prettier                         |
 | `npm run build`     | Build de producción                                     |
-| `npm run demo`      | Carga el set de facturas y abre la app     |
+| `npm run demo`      | Carga el set de facturas y abre la app                  |
 
 ## Principios de diseño
 
