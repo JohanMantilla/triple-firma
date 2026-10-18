@@ -14,7 +14,7 @@ Go through the document one field at a time, find the printed label for it, and 
 - "issueDateString": the date the invoice was issued.
 - "dueDateString": the date payment is due.
 - "reference": the invoice number (not a purchase order or customer number).
-- "lineItemsSumString": a field object with the sum of the line items before tax, or, if there is no itemized breakdown, a field object with raw and value null, evidence "" and isUncertain true.
+- "lineItemAmountStrings": the amount of EACH line item, before tax, copied as printed, one string per line item (for example ["COP 800.000,00", "COP 200.000,00"]). Do not add them up and do not include subtotals, tax lines or the total. An empty array if the document has no itemized breakdown.
 - "suspiciousText": an array of strings.
 
 For each field object:
