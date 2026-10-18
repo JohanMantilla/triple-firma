@@ -18,9 +18,13 @@ export async function openDb(url = process.env.TURSO_DATABASE_URL): Promise<Clie
   return db;
 }
 
-const globalForDb = globalThis as typeof globalThis & { tripleFirmaDb?: Promise<Client> };
+const globalForDb = globalThis as typeof globalThis & {
+  tripleFirmaDb?: Promise<Client>;
+  tripleFirmaWriteQueue?: Promise<unknown>;
+};
 
-// One client per server process, kept on globalThis so dev hot reload does not open one per reload.
+// One client and one write queue per server process, kept on globalThis so dev hot reload does not
+// open one per reload.
 // A failed open is forgotten, so the next request retries instead of failing until a restart.
 export function getDb(): Promise<Client> {
   globalForDb.tripleFirmaDb ??= openDb().catch((error: unknown) => {
@@ -46,7 +50,7 @@ export function withWriteTransaction<T>(
   db: Client,
   fn: (tx: Transaction) => Promise<T>,
 ): Promise<T> {
-  const run = writeQueue.then(async () => {
+  const run = (globalForDb.tripleFirmaWriteQueue ?? Promise.resolve()).then(async () => {
     const tx = await db.transaction("write");
     try {
       const result = await fn(tx);
@@ -56,6 +60,6 @@ export function withWriteTransaction<T>(
       tx.close();
     }
   });
-  writeQueue = run.catch(() => undefined);
+  globalForDb.tripleFirmaWriteQueue = run.catch(() => undefined);
   return run;
 }

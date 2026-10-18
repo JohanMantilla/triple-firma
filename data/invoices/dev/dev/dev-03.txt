@@ -1,0 +1,8 @@
+[16/10/2026, 10:02:11] Andes Labs Finanzas: Hola Lucía, ¿ya tienes la cuenta de octubre?
+[16/10/2026, 10:15:40] Lucía (Ñandú Contadores): Buenas! Sí, te paso los datos de la cuenta de cobro de octubre:
+[16/10/2026, 10:15:58] Lucía (Ñandú Contadores): Beneficiario: Ñandú Contadores SRL
+Monto: ARS 900.000,00
+Referencia: NC-0098
+Vence: 28/10/2026
+Concepto: Servicios contables octubre 2026
+[16/10/2026, 10:20:03] Andes Labs Finanzas: Recibido, gracias 🙌
