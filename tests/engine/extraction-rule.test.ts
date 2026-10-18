@@ -220,7 +220,7 @@ describe("evaluateExtractionRule (R1)", () => {
     });
   });
 
-  it("is wired into the engine, which still escalates while other rules are placeholders", () => {
+  it("is wired into the engine", () => {
     const decision = evaluateRules({
       invoice: buildInvoice(),
       config: buildRulesConfig(),
@@ -229,6 +229,5 @@ describe("evaluateExtractionRule (R1)", () => {
       now: NOW,
     });
     expect(decision.ruleResults[0]).toMatchObject({ ruleId: "R1", outcome: "PASS" });
-    expect(decision.outcome).toBe("ESCALATE");
   });
 });

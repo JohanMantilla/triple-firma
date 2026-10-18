@@ -1,7 +1,9 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { Client } from "@libsql/client";
+import type { ExpectedDecision } from "@/contracts/metrics";
 import { type RulesConfig, RulesConfigSchema } from "@/contracts/rules-config";
+import { parseExpectedCsv } from "./compute-metrics";
 import { detectSourceFormat, processInvoice, type ProcessInvoiceResult } from "./process-invoice";
 
 // The dataset's fixed clock, agreed with C. Demo, eval and CI decide every dataset invoice at this
@@ -40,4 +42,15 @@ export async function processInvoiceSet(
     });
   }
   return results;
+}
+
+// data/expected.csv (C). A missing file means no expected rows: the consumer (eval, CI) must treat
+// total 0 or a non-empty missingFiles as a failure, never as "0 leaks".
+export async function readExpectedDecisions(dataDir = DATA_DIR): Promise<ExpectedDecision[]> {
+  try {
+    return parseExpectedCsv(await readFile(path.join(dataDir, "expected.csv"), "utf8"));
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return [];
+    throw error;
+  }
 }

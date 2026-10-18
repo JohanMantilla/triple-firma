@@ -6,9 +6,9 @@ export const MESSAGES = {
   allRulesPassed: "Pagada: todas las reglas pasaron.",
   escalatedPrefix: "Escalada:",
   blockedPrefix: "Frenada:",
-  ruleNotImplemented: (ruleId: RuleId) =>
-    `${ruleId}: la regla aún no está implementada; se escala por seguridad.`,
   ruleFailed: (ruleId: RuleId) => `${ruleId}: la regla no pudo evaluarse; se escala por seguridad.`,
+  ruleFailedOnApproval: (ruleId: RuleId) =>
+    `${ruleId}: la regla no pudo revalidarse al aprobar; no se paga por seguridad.`,
 
   fieldLabels: {
     payee: "Beneficiario",
@@ -102,6 +102,8 @@ export const MESSAGES = {
   duplicate: {
     sameFile: (invoiceId: string) =>
       `R2: este mismo archivo ya se procesó como la factura ${invoiceId}.`,
+    alreadyPending: (invoiceId: string) =>
+      `R2: esta factura ya está pendiente de aprobación como ${invoiceId}; la decide una persona.`,
     unreadable: (labels: string) =>
       `R2: no se puede verificar si es duplicada porque no se pudo leer con certeza: ${labels}.`,
     // payee arrives already quoted by the rule; references are quoted here.
@@ -116,11 +118,17 @@ export const MESSAGES = {
     unreadableAmount: (reference: string | null, date: string) =>
       `R2: posible duplicado de ${invoiceNamed(reference)} del ${date}, cuyo monto no se pudo leer; requiere revisión humana.`,
     none: "R2: no hay facturas anteriores iguales ni parecidas.",
+    paidSameReference: (reference: string | null, amount: string, date: string) =>
+      `R2: ${invoiceNamed(reference)} por ${amount} ya se registró como pagable el ${date}; es la misma referencia, así que no se puede aprobar.`,
+    noneOnApproval:
+      "R2 (al aprobar): no hay una factura igual ya pagable ni el mismo archivo ya pagado.",
   },
 
   budget: {
     missingBaseAmount: (baseCurrency: string) =>
       `R6: no se pudo calcular el monto en ${baseCurrency} para compararlo con el presupuesto; se escala por seguridad.`,
+    missingBaseAmountOnApproval: (baseCurrency: string) =>
+      `R6: no se puede aprobar: la decisión no tiene monto en ${baseCurrency} para compararlo con el presupuesto.`,
     overBudget: (period: string, committed: string, budget: string, amount: string) =>
       `R6: presupuesto de ${period}: ${committed} comprometidos de ${budget}; este pago (${amount}) lo excede.`,
     overWithReserved: (
@@ -143,6 +151,19 @@ export const MESSAGES = {
       `R6: presupuesto de ${period}: ${committed} comprometidos${reserved === null ? "" : ` + ${reserved} reservados`} + este pago (${amount}) = ${total} de ${budget}.`,
   },
 
+  splitPayment: {
+    unreadablePayee:
+      "R7: no se pudo leer con certeza el beneficiario para buscar pagos fraccionados; se escala por seguridad.",
+    missingBaseAmount: (baseCurrency: string) =>
+      `R7: no se pudo calcular el monto en ${baseCurrency} para sumarlo con los pagos al mismo beneficiario; se escala por seguridad.`,
+    noEarlierPayments: (payee: string, windowDays: number) =>
+      `R7: no hay otros pagos a ${quoteUntrusted(payee)} ${withinWindow(windowDays)}.`,
+    overThreshold: (payee: string, total: string, parts: SummedParts, threshold: string) =>
+      `R7: ${quoteUntrusted(payee)} suma ${total} ${describeParts(parts)}; supera el umbral de aprobación de ${threshold}; requiere revisión humana.`,
+    withinThreshold: (payee: string, total: string, parts: SummedParts, threshold: string) =>
+      `R7: ${quoteUntrusted(payee)} suma ${total} ${describeParts(parts)}, dentro del umbral de aprobación de ${threshold}.`,
+  },
+
   suspiciousContent: {
     // A passing result says exactly what was checked: the total is never said to match when it was
     // not compared.
@@ -162,6 +183,12 @@ export const MESSAGES = {
       `el texto original contiene una instrucción dirigida al sistema, que se ignoró: ${quoteUntrusted(match)}.`,
     instructionInField: (label: string, match: string) =>
       `lo leído en ${label} contiene una instrucción dirigida al sistema, que se ignoró: ${quoteUntrusted(match)}.`,
+    unreadableLineItems: (count: number) =>
+      count === 1
+        ? "no se pudo leer el monto de 1 ítem, así que el total no se puede verificar."
+        : `no se pudo leer el monto de ${count} ítems, así que el total no se puede verificar.`,
+    subtotalMismatch: (printedSubtotal: string, summedItems: string) =>
+      `el subtotal impreso (${printedSubtotal}) no cuadra con la suma de los montos de los ítems (${summedItems}).`,
     totalMismatch: (amount: string, lineItemsSum: string, tax: string | null) =>
       tax === null
         ? `el total (${amount}) no cuadra con la suma de ítems (${lineItemsSum}).`
@@ -190,6 +217,30 @@ const MONTH_NAMES = [
 export function formatPeriod(period: Period): string {
   const [year, month] = period.split("-");
   return `${MONTH_NAMES[Number(month) - 1]} de ${year}`;
+}
+
+// The invoices R7 summed: earlier payments inside the window and pending escalations of any date.
+export type SummedParts = { windowDays: number; paymentCount: number; pendingCount: number };
+
+// "en los últimos 7 días (3 facturas, incluida esta)" when every earlier part is a payment inside the
+// window. A pending escalation counts whatever its date, so then the sentence names it instead of
+// claiming a window: "con esta factura, 1 pago en los últimos 7 días y 1 escalada pendiente de
+// aprobación de cualquier fecha".
+function describeParts({ windowDays, paymentCount, pendingCount }: SummedParts): string {
+  if (pendingCount === 0) {
+    return `${withinWindow(windowDays)} (${paymentCount + 1} facturas, incluida esta)`;
+  }
+  const payments =
+    paymentCount === 0
+      ? ""
+      : `, ${paymentCount} ${paymentCount === 1 ? "pago" : "pagos"} ${withinWindow(windowDays)}`;
+  const pending = `${pendingCount} ${pendingCount === 1 ? "escalada pendiente" : "escaladas pendientes"}`;
+  return `con esta factura${payments} y ${pending} de aprobación de cualquier fecha`;
+}
+
+// "en los últimos 7 días", or "hoy" for a one-day window.
+function withinWindow(windowDays: number): string {
+  return windowDays === 1 ? "hoy" : `en los últimos ${windowDays} días`;
 }
 
 // "USD, COP, MXN y ARS"

@@ -105,8 +105,8 @@ function toStoredDecision(row: Row): StoredDecision {
 }
 
 // An approved escalation counts in the period and at the time of its approval (HistoryEntry contract).
-// Money is always the decision's, never recomputed. An uncertain payee or reference is null, the same
-// way rule-context.ts treats uncertain money, so R2 compares only on what was read with certainty.
+// Money is always the decision's, never recomputed. Payee and reference are kept even when uncertain:
+// dropping them would let a clean copy of an approved invoice slip past R2.
 function toHistoryEntry({ record, decisionPeriod, approvalPeriod }: StoredDecision): HistoryEntry {
   const { invoice, decision, approval, status } = record;
   const { payee, reference } = invoice.extraction;
