@@ -15,7 +15,10 @@ const dataDir = resolve(process.argv[2] ?? "data");
 const outDir = resolve("scripts/fixtures");
 mkdirSync(outDir, { recursive: true });
 
-const rows = loadExpected(readFileSync(join(dataDir, "expected.csv"), "utf8"));
+const rows = loadExpected(
+  readFileSync(join(dataDir, "expected.csv"), "utf8"),
+  readFileSync(join(dataDir, "expected-justifications.csv"), "utf8"),
+);
 const OUT = { PAGAR: "PAY", FRENAR: "BLOCK", ESCALAR: "ESCALATE" } as const;
 
 const perfect: DecisionRecord[] = rows.map((r) => {

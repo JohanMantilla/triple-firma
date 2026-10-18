@@ -9,6 +9,7 @@ import {
   parseCsv,
 } from "../scripts/eval-lib";
 import type { DecisionRecord } from "../scripts/eval-lib";
+import { parseExpectedCsv } from "@/pipeline/compute-metrics";
 
 const expectedCsv = readFileSync(join(__dirname, "../data/expected.csv"), "utf8");
 const expected = loadExpected(expectedCsv);
@@ -75,6 +76,20 @@ describe("expected.csv real", () => {
   it("toda fila no-PAGAR declara al menos una regla", () => {
     for (const e of expected)
       if (e.decision !== "PAGAR") expect(e.rules.length, e.file).toBeGreaterThan(0);
+  });
+  it("lo lee el pipeline (/api/metrics) con las mismas decisiones y reglas", () => {
+    const fromPipeline = parseExpectedCsv(expectedCsv);
+    expect(fromPipeline.map((e) => [e.fileName, e.expectedRuleIds])).toEqual(
+      expected.map((e) => [e.file, e.rules]),
+    );
+  });
+  it("cada fila tiene su justificación", () => {
+    const justifications = readFileSync(
+      join(__dirname, "../data/expected-justifications.csv"),
+      "utf8",
+    );
+    for (const e of loadExpected(expectedCsv, justifications))
+      expect(e.justification, e.file).not.toBe("");
   });
 });
 
