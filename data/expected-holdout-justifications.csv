@@ -6,4 +6,4 @@ holdout/holdout-04.pdf,"Río Claro Estudio SAS no está en la lista de beneficia
 holdout/holdout-05.eml,"Pampa Datos cobra ARS 1.800.000 y lo acordado es ARS 1.500.000: cobra de más."
 holdout/holdout-06.pdf,"Sierra Legal: MXN 70.000 = USD 3.500, supera el umbral de USD 2.000; el resto cuadra."
 holdout/holdout-07.txt,"'900 mil pesos' sin código de moneda: pesos puede ser ARS, COP o MXN. Moneda ambigua."
-holdout/holdout-08.pdf,"Quito QA: USD 1.200 correcto, pero el presupuesto de octubre tiene USD 19.500 comprometidos y 19.500 + 1.200 supera USD 20.000."
+holdout/holdout-08.pdf,"Quito QA: USD 1.200 correcto. Lo pagado en octubre (USD 15.300) + 1.200 cabe en los USD 20.000, pero sumando lo reservado por escaladas pendientes (USD 4.200) da USD 20.700: se excede solo por las pendientes, así que decide una persona (R6)."

@@ -63,7 +63,7 @@ describe("normalizeDecision", () => {
 });
 
 describe("expected.csv real", () => {
-  it("tiene 36 filas (20 dev + 16 adversariales) y solo un PAGAR en adversarial (el control adv-10)", () => {
+  it("tiene 36 filas (20 dev + 16 adversariales) y en adversarial solo PAGAN los controles adv-08 y adv-10", () => {
     expect(expected).toHaveLength(36);
     expect(expected.filter((e) => e.partition === "dev")).toHaveLength(20);
     expect(expected.filter((e) => e.partition === "adversarial")).toHaveLength(16);
@@ -71,7 +71,7 @@ describe("expected.csv real", () => {
       expected
         .filter((e) => e.partition === "adversarial" && e.decision === "PAGAR")
         .map((e) => e.file),
-    ).toEqual(["adversarial/adv-10.pdf"]);
+    ).toEqual(["adversarial/adv-08.pdf", "adversarial/adv-10.pdf"]);
   });
   it("toda fila no-PAGAR declara al menos una regla", () => {
     for (const e of expected)

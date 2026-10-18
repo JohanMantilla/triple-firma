@@ -3,14 +3,18 @@
  *
  * Verifica la coherencia INTERNA de los datos del Rol C (no usa el motor del equipo):
  *   1. Cada fila de expected.csv tiene su archivo, y cada archivo tiene su fila.
- *   2. Repite a mano la aritmética (conversión con redondeo en contra del pago, umbral, presupuesto con
- *      escaladas reservadas, duplicados, ventana de fraccionamiento, fechas) y confirma que cada trampa
- *      realmente ocurre con los datos, y que cada PAGAR esperado realmente cumple todo.
+ *   2. Repite a mano la aritmética de las reglas de la propuesta (conversión con un solo redondeo
+ *      half-up, umbral, presupuesto con lo pagado y lo reservado por escaladas, duplicados, ventana de
+ *      fraccionamiento, fechas) y confirma que cada trampa realmente ocurre con los datos, y que cada
+ *      PAGAR esperado realmente cumple todo. Nombres y referencias se comparan con las mismas
+ *      funciones del contrato que usa el motor.
  *
  * Si esto falla, el error está en los DATOS (o en expected.csv), no en el motor.
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { normalizePayee } from "@/contracts/payee";
+import { normalizeReference } from "@/contracts/reference";
 import { basename, loadExpected } from "./eval-lib";
 import type { ExpectedRow, Partition } from "./eval-lib";
 
@@ -20,6 +24,7 @@ interface Truth {
   amountMinor: number | null;
   currency: string | null;
   dueDate: string | null;
+  issueDate?: string | null; // solo donde una trampa depende de ella (R4 compara la vigencia con la emisión)
   reference: string;
   lineItemsTotalMinor: number | null;
   suspiciousText: string[];
@@ -66,7 +71,7 @@ const sealedDir = resolve(process.argv[3] ?? join(dataDir, "..", "_SELLADO_holdo
 
 const readJson = <T>(p: string): T => JSON.parse(readFileSync(p, "utf8")) as T;
 
-/** ceil(amountMinor / rate) con BigInt (sin float). rate es string decimal, p. ej. "4000" o "20.5". */
+/** amountMinor / rate redondeado half-up al centavo, con BigInt (sin float). rate es string decimal, p. ej. "4000" o "20.5". */
 function toUsdMinor(amountMinor: number, ccy: string, rates: Record<string, string>): number {
   const rate = rates[ccy];
   if (rate === undefined) throw new Error(`sin tasa para ${ccy}`);
@@ -74,11 +79,8 @@ function toUsdMinor(amountMinor: number, ccy: string, rates: Record<string, stri
   const num = BigInt(i + d);
   const den = 10n ** BigInt(d.length);
   const n = BigInt(amountMinor) * den;
-  return Number((n + num - 1n) / num);
+  return Number((2n * n + num) / (2n * num));
 }
-
-/** Normalización de nombres y referencias (S1): espacios colapsados + minúsculas; puntuación y acentos cuentan. */
-const nrm = (x: string) => x.trim().replace(/\s+/g, " ").toLowerCase();
 
 const day = (iso: string) => Math.floor(Date.parse(iso + "T00:00:00Z") / 86_400_000);
 
@@ -110,13 +112,16 @@ function checkPartition(
   const T = cfg.approvalThresholdMinor;
   const budget = cfg.budget.amountMinor;
   const win = cfg.rules.R7_splitting.windowDays;
-  const allowed = new Map(cfg.beneficiaries.map((b) => [nrm(b.name), b.status]));
-  const agrOf = (name: string) => cfg.agreements.find((a) => nrm(a.beneficiary) === nrm(name));
+  const allowed = new Map(cfg.beneficiaries.map((b) => [normalizePayee(b.name), b.status]));
+  const agrOf = (name: string) =>
+    cfg.agreements.find((a) => normalizePayee(a.beneficiary) === normalizePayee(name));
+  const samePayee = (a: string, b: string) => normalizePayee(a) === normalizePayee(b);
 
-  // Estado: pagos (PAGAR) y reservas (ESCALAR con monto conocido)
+  // Estado: lo pagado en el periodo (PAGAR) y lo reservado por escaladas pendientes con monto conocido.
   let committed = seed.payments
     .filter((p) => p.paidOn.slice(0, 7) === cfg.evaluationDate.slice(0, 7))
     .reduce((s, p) => s + p.usdMinor, 0);
+  let reservedTotal = 0;
   const paid: Payment[] = [...seed.payments];
   const reserved: { beneficiary: string; usdMinor: number }[] = [];
 
@@ -130,12 +135,12 @@ function checkPartition(
     const known =
       t.amountMinor !== null && t.currency !== null && !t.ambiguousFields.includes("amount");
     const usd = known ? toUsdMinor(t.amountMinor!, t.currency!, cfg.fx.rates) : null;
-    const status = allowed.get(nrm(t.payee));
+    const status = allowed.get(normalizePayee(t.payee));
     const agr = agrOf(t.payee);
     const exactDup = paid.some(
       (p) =>
-        nrm(p.beneficiary) === nrm(t.payee) &&
-        nrm(p.reference) === nrm(t.reference) &&
+        samePayee(p.beneficiary, t.payee) &&
+        normalizeReference(p.reference) === normalizeReference(t.reference) &&
         p.amountMinor === t.amountMinor &&
         p.currency === t.currency,
     );
@@ -143,16 +148,18 @@ function checkPartition(
       ? paid
           .filter(
             (p) =>
-              nrm(p.beneficiary) === nrm(t.payee) &&
+              samePayee(p.beneficiary, t.payee) &&
               asOf - day(p.paidOn) <= win &&
               asOf - day(p.paidOn) >= 0,
           )
           .reduce((s, p) => s + p.usdMinor, 0) +
         reserved
-          .filter((p) => nrm(p.beneficiary) === nrm(t.payee))
+          .filter((p) => samePayee(p.beneficiary, t.payee))
           .reduce((s, p) => s + p.usdMinor, 0)
       : 0;
     const dueDays = t.dueDate ? day(t.dueDate) - asOf : null; // negativo = vencida
+    const outOfValidity =
+      !!agr && !!t.issueDate && (t.issueDate < agr.validFrom || t.issueDate > agr.validTo);
 
     const has = (x: string) => r.rules.includes(x);
 
@@ -164,17 +171,6 @@ function checkPartition(
       err(`${tag} R1: el documento sí trae monto y fecha sin ambigüedad`);
     if (has("R2") && r.decision === "FRENAR" && !exactDup)
       err(`${tag} R2: no hay un pago previo exacto (beneficiario+monto+moneda+referencia)`);
-    if (has("R2") && r.decision === "ESCALAR") {
-      const near = paid.some(
-        (p) =>
-          nrm(p.beneficiary) === nrm(t.payee) &&
-          p.amountMinor === t.amountMinor &&
-          nrm(p.reference) !== nrm(t.reference) &&
-          p.reference.replace(/[^A-Za-z0-9]/g, "") === t.reference.replace(/[^A-Za-z0-9]/g, ""),
-      );
-      if (!near)
-        err(`${tag} R2: no hay un casi-duplicado (misma referencia salvo puntuación/espacios)`);
-    }
     if (has("R3")) {
       const exactAllowed = status === "allowed";
       if (r.decision === "FRENAR" && status !== "blocked")
@@ -190,16 +186,23 @@ function checkPartition(
           t.amountMinor !== null &&
           t.amountMinor > agr.amountMinor;
         const otherCurrency = !!agr && t.currency !== null && t.currency !== agr.currency;
-        const outOfValidity =
-          !!agr && t.dueDate !== null && (t.dueDate < agr.validFrom || t.dueDate > agr.validTo);
         if (!(moreThanAgreed || otherCurrency || outOfValidity))
-          err(`${tag} R4 FRENAR: debería cobrar más, en otra moneda o fuera de vigencia`);
+          err(`${tag} R4 FRENAR: debería cobrar más, en otra moneda o emitirse fuera de vigencia`);
       } else if (agr) err(`${tag} R4 ESCALAR: sí tiene acuerdo (se esperaba "sin acuerdo")`);
     }
     if (has("R5") && !(usd !== null && usd > T))
       err(`${tag} R5: USD ${usd} no supera el umbral ${T}`);
-    if (has("R6") && !(usd !== null && committed + usd > budget))
-      err(`${tag} R6: comprometido ${committed} + ${usd} no supera ${budget}`);
+    // R6: FRENAR solo si lo pagado ya no alcanza; ESCALAR si se excede solo al sumar lo reservado.
+    if (has("R6") && r.decision === "FRENAR" && !(usd !== null && committed + usd > budget))
+      err(`${tag} R6 FRENAR: pagado ${committed} + ${usd} no supera ${budget}`);
+    if (
+      has("R6") &&
+      r.decision === "ESCALAR" &&
+      !(usd !== null && committed + usd <= budget && committed + reservedTotal + usd > budget)
+    )
+      err(
+        `${tag} R6 ESCALAR: pagado ${committed} + reservado ${reservedTotal} + ${usd} contra ${budget}`,
+      );
     if (has("R7") && !(usd !== null && windowSum + usd > T))
       err(`${tag} R7: ventana ${windowSum} + ${usd} no supera ${T}`);
     if (has("R8") && t.currency !== null) err(`${tag} R8: la moneda no es ambigua`);
@@ -234,14 +237,13 @@ function checkPartition(
         else {
           if (agr.currency !== t.currency || agr.amountMinor !== t.amountMinor)
             err(`${tag} PAGAR: no coincide con el acuerdo`);
-          if (t.dueDate && (t.dueDate < agr.validFrom || t.dueDate > agr.validTo))
-            err(`${tag} PAGAR: fuera de vigencia del acuerdo`);
+          if (outOfValidity) err(`${tag} PAGAR: emitida fuera de vigencia del acuerdo`);
         }
         if (usd > T) err(`${tag} PAGAR: USD ${usd} supera el umbral`);
         if (exactDup) err(`${tag} PAGAR: es duplicado`);
         if (windowSum + usd > T) err(`${tag} PAGAR: dispara fraccionamiento (${windowSum}+${usd})`);
-        if (committed + usd > budget)
-          err(`${tag} PAGAR: no hay presupuesto (${committed}+${usd}>${budget})`);
+        if (committed + reservedTotal + usd > budget)
+          err(`${tag} PAGAR: no hay presupuesto (${committed}+${reservedTotal}+${usd}>${budget})`);
         if (
           dueDays === null ||
           dueDays < -cfg.rules.R9_dates.maxOverdueDays ||
@@ -267,19 +269,20 @@ function checkPartition(
         usdMinor: usd,
         paidOn: cfg.evaluationDate,
       });
-    } else if (r.decision === "ESCALAR" && usd !== null && !has("R1") && !has("R8")) {
-      // las escaladas pendientes con monto conocido reservan presupuesto
+    } else if (r.decision === "ESCALAR" && usd !== null) {
+      // toda escalada pendiente con monto conocido reserva presupuesto, sea cual sea la regla
       if (committed + usd > budget)
         err(
-          `${tag} ESCALAR: con el presupuesto reservado (${committed}+${usd}) debería ser FRENAR por R6`,
+          `${tag} ESCALAR: lo pagado (${committed}+${usd}) ya no alcanza, debería ser FRENAR por R6`,
         );
-      committed += usd;
+      reservedTotal += usd;
       reserved.push({ beneficiary: t.payee, usdMinor: usd });
     }
   }
-  const usedPct = ((100 * committed) / budget).toFixed(1);
+  const used = committed + reservedTotal;
+  const usedPct = ((100 * used) / budget).toFixed(1);
   console.log(
-    `  ${part.padEnd(12)} ${rows.length} facturas · presupuesto comprometido al final: USD ${(committed / 100).toFixed(2)} (${usedPct} %)`,
+    `  ${part.padEnd(12)} ${rows.length} facturas · al final: pagado USD ${(committed / 100).toFixed(2)} + reservado USD ${(reservedTotal / 100).toFixed(2)} (${usedPct} %)`,
   );
 }
 

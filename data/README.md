@@ -35,7 +35,7 @@ El **holdout (8 facturas)** está en `data/invoices/holdout/` desde la corrida f
 | Presupuesto mensual | **USD 20.000** |
 | Umbral de aprobación humana (por pago) | **USD 2.000** (un pago *igual* al umbral no escala; solo *mayor*) |
 | Tasas fijas (unidades locales por 1 USD) | COP **4.000** · MXN **20** · ARS **1.000** · USD 1 |
-| Redondeo de conversión | **hacia arriba, al centavo** ("en contra del pago") |
+| Redondeo de conversión | **un solo redondeo half-up, al centavo** (invariante 6) |
 | Fecha de evaluación fija | **2026-10-17** (para R9 y el periodo del presupuesto: así los resultados no cambian con el día en que se corra) |
 | Proveedores permitidos | 13 (CO, MX, AR, EC) + 1 **bloqueado** (Tierra Verde Logística SAS) |
 | Acuerdos | 12 de los 13 permitidos (Altamar Consultores está permitido **sin acuerdo** a propósito) |
@@ -51,20 +51,20 @@ Algunas reglas dependen de lo que ya pasó (duplicado R2, presupuesto R6, fracci
 3. Dentro de la corrida, **PAGAR** agrega un pago al registro y **ESCALAR** deja la factura pendiente (nadie la aprueba durante la evaluación).
 4. La fecha "de hoy" es siempre `evaluationDate` (2026-10-17).
 
-## 4. Supuestos de reglas — **A: por favor confirmar o discutir en equipo**
+## 4. Supuestos de reglas (revisados con A el 18/10/2026)
 
-El `expected.csv` está escrito desde la propuesta (§3), pero la propuesta deja huecos. Estos son los criterios que usé; **si el motor decide otra cosa, la discusión es de equipo** (no se cambia el CSV en silencio).
+El `expected.csv` está escrito desde la propuesta (§3). A revisó estos criterios contra la especificación: donde nuestro supuesto difería, se alinearon los **datos** con la regla (S1, S2, S3, S4, S5 y S8). Si el motor decide otra cosa, la discusión es de equipo: no se cambia el CSV en silencio.
 
 | # | Supuesto | Dónde pega |
 |---|---|---|
-| S1 | **Normalización de nombres y referencias** = quitar espacios sobrantes + minúsculas. La **puntuación, los acentos y los caracteres parecidos SÍ cuentan**. Entonces `Pampa Datos S.R.L.` ≠ `Pampa Datos SRL` (aproximado → ESCALAR) y `CA 0077` ≠ `CA-0077` (casi duplicado → ESCALAR). | adv-02, adv-03, adv-08, adv-09, adv-10, adv-13 |
-| S2 | R5 compara **USD convertido con redondeo hacia arriba** contra el umbral. MXN 40.000,02 → USD 2.000,001 → **2.000,01** → supera. Con redondeo normal daría 2.000,00 y pasaría. | adv-07 |
-| S3 | **Las escaladas pendientes reservan presupuesto** (propuesta §3, "decisión abierta" = Sí). Solo reservan las que tienen monto y moneda conocidos; los FRENAR y las escaladas por R1/R8 no reservan. | dev-20 |
-| S4 | Si un pago excede el presupuesto → **FRENAR** (más restrictivo que ESCALAR). | dev-20 |
-| S5 | R4: cobra **más** → FRENAR · cobra **menos** → ESCALAR · **sin acuerdo** → ESCALAR · tolerancia 0 · vigencia = fecha de vencimiento dentro de `validFrom…validTo` · **moneda distinta de la del acuerdo → FRENAR** · **vencimiento fuera de vigencia → FRENAR**. | dev-11, dev-14, adv-06, adv-11, adv-12 |
+| S1 | Nombres y referencias se comparan **solo** con las funciones del contrato. `normalizePayee` quita puntos y comas, colapsa espacios y pasa a minúsculas: `Pampa Datos S.R.L.` = `Pampa Datos SRL` (mismo beneficiario). `normalizeReference` ignora espacios, guiones, puntos y mayúsculas: `CA 0077` = `ca-0077` = `CA-0077`. Los **acentos y los caracteres parecidos SÍ cuentan** (`Logistica` ≠ `Logística`, una "а" cirílica ≠ "a"). | adv-02, adv-03, adv-08, adv-09, adv-10, adv-13 |
+| S2 | Conversión con **un solo redondeo half-up** al centavo (invariante 6). Por eso la trampa del centavo usa un monto exacto: MXN 40.000,20 / 20 = **USD 2.000,01** → supera el umbral sin depender del redondeo. | adv-07 |
+| S3 | **Toda escalada pendiente con monto conocido reserva presupuesto**, sea cual sea la regla que la escaló (también R1 por una fecha ilegible). Los FRENAR no reservan. | dev-20, holdout-08 |
+| S4 | R6: si **lo pagado** + este pago excede el presupuesto → **FRENAR**. Si se excede **solo** al sumar lo reservado por pendientes → **ESCALAR** (la pendiente aún puede rechazarse). | dev-20, holdout-08 |
+| S5 | R4: cobra **más** → FRENAR · cobra **menos** → ESCALAR · **sin acuerdo** → ESCALAR · tolerancia 0 · **moneda distinta de la del acuerdo → FRENAR** · **emitida fuera de la vigencia** (`issueDate` fuera de `validFrom…validTo`) → FRENAR. | dev-11, dev-14, adv-06, adv-11, adv-12 |
 | S6 | R7: ventana de **7 días**; suma de pagos + escaladas pendientes del mismo beneficiario + este pago **> umbral** → ESCALAR. | adv-04 |
 | S7 | R9: vencida **> 30 días** → ESCALAR; vence a **> 90 días** → ESCALAR. Sin fecha de vencimiento → R1. Fecha que no existe (31/02) → R9. | dev-16, dev-15, adv-15 |
-| S8 | R2: **exacto** (beneficiario+monto+moneda+referencia iguales según S1, ya pagado) → FRENAR. **Casi** (misma referencia salvo puntuación/espacios, mismo beneficiario y monto) → ESCALAR. | dev-08, dev-09, adv-02 |
+| S8 | R2: **exacto** (beneficiario + monto + moneda + referencia iguales según S1, ya pagado) → FRENAR. Una diferencia solo de espacios, guiones o mayúsculas en la referencia es duplicado exacto. | dev-08, dev-09, adv-02, adv-09 |
 | S9 | Un monto como `USD 1.200` (sin decimales, con punto) es **ambiguo** → campo incierto → ESCALAR (R1). Un `$` o "pesos" sin código de moneda → ESCALAR (R8). | adv-05, dev-18 |
 | S10 | R10: total ≠ suma de ítems, **o** texto dirigido al sistema ("ignora las reglas…") → ESCALAR. La instrucción se ignora (también si llega por chat). | dev-17, adv-01, adv-16 |
 | S11 | Si el cobro incluye cargos extra (mora, impuestos), lo que se compara con el acuerdo es el **TOTAL a pagar**, no el subtotal. | adv-06 |

@@ -26,7 +26,7 @@
       "MXN": "20",
       "ARS": "1000"
     },
-    "rounding": "against_payment_ceil_to_cent"
+    "rounding": "half_up_to_cent"
   },
   "rules": {
     "R2_duplicate": {
@@ -264,7 +264,7 @@
       "beneficiaryId": "B13",
       "beneficiary": "Lomas Analítica SA de CV",
       "kind": "per_invoice",
-      "amountMinor": 4000002,
+      "amountMinor": 4000020,
       "currency": "MXN",
       "validFrom": "2026-01-01",
       "validTo": "2026-12-31"
