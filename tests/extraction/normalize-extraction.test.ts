@@ -262,3 +262,85 @@ describe("normalizeExtraction", () => {
     );
   });
 });
+
+describe("normalizeExtraction — ambiguous dates resolved from the same document", () => {
+  function dates(issue: string, due: string, flagged = true) {
+    const { issueDate, dueDate } = normalizeExtraction({
+      ...READER_RESPONSE,
+      issueDateString: field(issue, issue, flagged),
+      dueDateString: field(due, due, flagged),
+    });
+    return { issueDate, dueDate };
+  }
+
+  it("reads an ambiguous due date in the order an unambiguous issue date proves", () => {
+    const { issueDate, dueDate } = dates("18/10/2026", "03/11/2026");
+    expect(issueDate.value).toBe("2026-10-18");
+    expect(dueDate.value).toBe("2026-11-03");
+    expect(dueDate.isUncertain).toBe(false);
+  });
+
+  it("reads an ambiguous issue date in the order an unambiguous due date proves", () => {
+    const { issueDate, dueDate } = dates("03/10/2026", "30/10/2026");
+    expect(issueDate.value).toBe("2026-10-03");
+    expect(issueDate.isUncertain).toBe(false);
+    expect(dueDate.value).toBe("2026-10-30");
+  });
+
+  it("reads month first when the unambiguous date proves it", () => {
+    const { issueDate, dueDate } = dates("10/18/2026", "11/03/2026");
+    expect(issueDate.value).toBe("2026-10-18");
+    expect(dueDate.value).toBe("2026-11-03");
+  });
+
+  it("clears the reader's flag only on the date that was resolved", () => {
+    const { issueDate, dueDate } = dates("18/10/2026", "03/11/2026");
+    expect(issueDate.isUncertain).toBe(true);
+    expect(dueDate.isUncertain).toBe(false);
+  });
+
+  it("keeps both uncertain when both dates are ambiguous", () => {
+    const { issueDate, dueDate } = dates("03/10/2026", "04/11/2026");
+    expect(issueDate).toMatchObject({ value: null, isUncertain: true });
+    expect(dueDate).toMatchObject({ value: null, isUncertain: true });
+  });
+
+  it("does not infer from a different separator", () => {
+    const { dueDate } = dates("18/10/2026", "03.11.2026");
+    expect(dueDate).toMatchObject({ value: null, isUncertain: true });
+  });
+
+  it("does not infer from an ISO date or a month name", () => {
+    expect(dates("2026-10-18", "03/11/2026").dueDate.value).toBeNull();
+    expect(dates("Oct 18, 2026", "03/11/2026").dueDate.value).toBeNull();
+  });
+
+  it("does not infer from a date that does not exist", () => {
+    expect(dates("31/02/2026", "03/11/2026").dueDate.value).toBeNull();
+  });
+
+  it("drops an inferred date that leaves the due date before the issue date", () => {
+    // 20/10/2026 proves day first, so 03/10/2026 is 3 Oct: before the issue date.
+    const { issueDate, dueDate } = dates("20/10/2026", "03/10/2026");
+    expect(issueDate.value).toBe("2026-10-20");
+    expect(dueDate).toMatchObject({ value: null, isUncertain: true });
+  });
+
+  it("drops an inferred issue date that falls after the due date", () => {
+    const { issueDate, dueDate } = dates("11/10/2026", "05/10/2026");
+    expect(issueDate).toMatchObject({ value: null, isUncertain: true });
+    expect(dueDate.value).toBeNull();
+  });
+
+  it("leaves unambiguous dates as they are, even with an inverted order", () => {
+    const { issueDate, dueDate } = dates("30/10/2026", "25/10/2026", false);
+    expect(issueDate.value).toBe("2026-10-30");
+    expect(dueDate.value).toBe("2026-10-25");
+  });
+
+  it("leaves unambiguous dates of different orders as they are", () => {
+    const { issueDate, dueDate } = dates("18/10/2026", "10/30/2026", false);
+    expect(issueDate.value).toBe("2026-10-18");
+    expect(dueDate.value).toBe("2026-10-30");
+  });
+});
