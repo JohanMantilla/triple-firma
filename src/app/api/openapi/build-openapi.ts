@@ -1,0 +1,277 @@
+import { z } from "zod";
+import { ApprovalRequestSchema } from "@/contracts/approval";
+import { ApiErrorSchema } from "@/contracts/api-error";
+import { AuditVerificationSchema } from "@/contracts/audit-entry";
+import { DecisionRecordSchema } from "@/contracts/decision-record";
+import { HistoryEntryStatusSchema } from "@/contracts/history";
+import { MetricsSchema } from "@/contracts/metrics";
+import { RulesConfigSchema, RulesConfigVersionSchema } from "@/contracts/rules-config";
+import pkg from "../../../../package.json";
+
+// Zod emits JSON Schema 2020-12, which is what OpenAPI 3.1 uses; only the $schema key must go.
+function toSchema(schema: z.ZodType, io: "input" | "output") {
+  const { $schema: _dropped, ...rest } = z.toJSONSchema(schema, {
+    io,
+    unrepresentable: "any",
+  });
+  return rest;
+}
+
+const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` });
+const jsonBody = (name: string) => ({
+  content: { "application/json": { schema: ref(name) } },
+});
+
+function errorResponse(description: string, codes: readonly string[]) {
+  return {
+    description: `${description} Códigos: ${codes.join(", ")}.`,
+    ...jsonBody("ApiError"),
+  };
+}
+
+const idParameter = (description: string) => ({
+  name: "id",
+  in: "path",
+  required: true,
+  description,
+  schema: { type: "string" },
+});
+
+const NOT_FOUND = errorResponse("No existe.", ["NOT_FOUND"]);
+
+const PATHS = {
+  "/api/health": {
+    get: {
+      operationId: "getHealth",
+      tags: ["system"],
+      summary: "Estado del servicio",
+      description: "Úsalo para comprobar que el servidor responde.",
+      responses: {
+        "200": {
+          description: "El servidor está activo.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: { status: { const: "ok" } },
+                required: ["status"],
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  "/api/invoices": {
+    post: {
+      operationId: "uploadInvoice",
+      tags: ["invoices"],
+      summary: "Subir una factura",
+      description:
+        "Úsalo para que el agente lea una factura (PDF, imagen, .eml o .txt) y decida PAGAR, FRENAR o ESCALAR.",
+      requestBody: {
+        required: true,
+        content: {
+          "multipart/form-data": {
+            schema: {
+              type: "object",
+              properties: { file: { type: "string", format: "binary" } },
+              required: ["file"],
+            },
+          },
+        },
+      },
+      responses: {
+        "200": {
+          description: "El archivo ya estaba decidido: se devuelve la decisión existente.",
+          ...jsonBody("DecisionRecord"),
+        },
+        "201": { description: "Decisión nueva.", ...jsonBody("DecisionRecord") },
+        "400": errorResponse("Solicitud inválida.", [
+          "MISSING_FILE",
+          "UNSUPPORTED_FILE_TYPE",
+          "EMPTY_SOURCE_TEXT",
+        ]),
+        "409": errorResponse("Aún no hay reglas configuradas.", ["NO_RULES_CONFIG"]),
+        "413": errorResponse("Archivo demasiado grande.", [
+          "FILE_TOO_LARGE",
+          "SOURCE_TEXT_TOO_LONG",
+        ]),
+      },
+    },
+  },
+  "/api/invoices/{id}/file": {
+    get: {
+      operationId: "getInvoiceFile",
+      tags: ["invoices"],
+      summary: "Archivo original de la factura",
+      description: "Úsalo para mostrar o descargar el archivo exactamente como llegó.",
+      parameters: [
+        idParameter(
+          "Identificador de la factura (`invoice.id`, el campo `invoiceId` de la decisión).",
+        ),
+      ],
+      responses: {
+        "200": {
+          description: "Bytes originales del archivo.",
+          content: { "*/*": { schema: { type: "string", format: "binary" } } },
+        },
+        "404": NOT_FOUND,
+      },
+    },
+  },
+  "/api/decisions": {
+    get: {
+      operationId: "listDecisions",
+      tags: ["decisions"],
+      summary: "Listar decisiones",
+      description:
+        "Úsalo para ver las decisiones, de la más nueva a la más antigua; filtra por estado para ver la bandeja de escaladas.",
+      parameters: [
+        {
+          name: "status",
+          in: "query",
+          required: false,
+          description: "Estado resultante de la decisión.",
+          schema: toSchema(HistoryEntryStatusSchema, "input"),
+        },
+      ],
+      responses: {
+        "200": {
+          description: "Lista de decisiones.",
+          content: {
+            "application/json": { schema: { type: "array", items: ref("DecisionRecord") } },
+          },
+        },
+        "400": errorResponse("Filtro inválido.", ["INVALID_REQUEST"]),
+      },
+    },
+  },
+  "/api/decisions/{id}": {
+    get: {
+      operationId: "getDecision",
+      tags: ["decisions"],
+      summary: "Detalle de una decisión",
+      description:
+        "Úsalo para leer el resultado por regla y la explicación de una decisión concreta.",
+      parameters: [idParameter("Identificador de la decisión.")],
+      responses: {
+        "200": { description: "La decisión.", ...jsonBody("DecisionRecord") },
+        "404": NOT_FOUND,
+      },
+    },
+  },
+  "/api/approvals/{decisionId}": {
+    post: {
+      operationId: "resolveApproval",
+      tags: ["approvals"],
+      summary: "Aprobar o rechazar una escalada",
+      description:
+        "Úsalo solo con autorización de una persona: aprueba o rechaza una decisión escalada y todavía no hay autenticación. Al aprobar se revalidan duplicados (R2) y presupuesto (R6) en ese momento; si alguna falla, la decisión termina en FRENAR y la respuesta es 200 con `approval.revalidationResults`.",
+      "x-human-only": true,
+      parameters: [
+        {
+          name: "decisionId",
+          in: "path",
+          required: true,
+          description: "Identificador de la decisión escalada.",
+          schema: { type: "string" },
+        },
+      ],
+      requestBody: { required: true, ...jsonBody("ApprovalRequest") },
+      responses: {
+        "200": {
+          description: "La decisión con su aprobación aplicada (también si terminó en FRENAR).",
+          ...jsonBody("DecisionRecord"),
+        },
+        "400": errorResponse("Solicitud inválida; `issues` lista los campos.", ["INVALID_REQUEST"]),
+        "404": NOT_FOUND,
+        "409": errorResponse("No se puede resolver.", [
+          "NOT_ESCALATED",
+          "ALREADY_RESOLVED",
+          "NO_RULES_CONFIG",
+        ]),
+      },
+    },
+  },
+  "/api/config": {
+    get: {
+      operationId: "getRulesConfig",
+      tags: ["config"],
+      summary: "Reglas vigentes",
+      description: "Úsalo para leer la versión actual de las reglas configuradas.",
+      responses: {
+        "200": { description: "Versión vigente de las reglas.", ...jsonBody("RulesConfigVersion") },
+        "404": NOT_FOUND,
+      },
+    },
+    put: {
+      operationId: "saveRulesConfig",
+      tags: ["config"],
+      summary: "Guardar reglas",
+      description:
+        "Úsalo solo con autorización de una persona: crea una versión nueva de las reglas y todavía no hay autenticación.",
+      "x-human-only": true,
+      requestBody: { required: true, ...jsonBody("RulesConfigInput") },
+      responses: {
+        "200": { description: "Versión guardada.", ...jsonBody("RulesConfigVersion") },
+        "400": errorResponse("Reglas inválidas; `issues` lista los campos.", ["INVALID_REQUEST"]),
+      },
+    },
+  },
+  "/api/audit/verify": {
+    get: {
+      operationId: "verifyAuditChain",
+      tags: ["audit"],
+      summary: "Verificar el registro",
+      description:
+        "Úsalo para comprobar que la cadena de hashes del registro de auditoría no fue alterada.",
+      responses: {
+        "200": { description: "Resultado de la verificación.", ...jsonBody("AuditVerification") },
+      },
+    },
+  },
+  "/api/metrics": {
+    get: {
+      operationId: "getMetrics",
+      tags: ["metrics"],
+      summary: "Métricas",
+      description:
+        "Úsalo para ver autonomía, exactitud y fugas de las decisiones guardadas frente a lo esperado.",
+      responses: { "200": { description: "Métricas.", ...jsonBody("Metrics") } },
+    },
+  },
+};
+
+export function buildOpenApiDocument() {
+  return {
+    openapi: "3.1.0" as const,
+    info: {
+      title: "Triple Firma API",
+      version: pkg.version,
+      description:
+        "El LLM lee, el código decide, la persona autoriza. Nota: «Try it out» usa la base de datos a la que apunta el servidor; las operaciones con x-human-only requieren autorización de una persona.",
+    },
+    tags: [
+      { name: "system", description: "Estado del servicio" },
+      { name: "invoices", description: "Facturas" },
+      { name: "decisions", description: "Decisiones" },
+      { name: "approvals", description: "Aprobaciones" },
+      { name: "config", description: "Reglas" },
+      { name: "audit", description: "Registro de auditoría" },
+      { name: "metrics", description: "Métricas" },
+    ],
+    paths: PATHS,
+    components: {
+      schemas: {
+        ApiError: toSchema(ApiErrorSchema, "output"),
+        DecisionRecord: toSchema(DecisionRecordSchema, "output"),
+        ApprovalRequest: toSchema(ApprovalRequestSchema, "input"),
+        RulesConfigInput: toSchema(RulesConfigSchema, "input"),
+        RulesConfigVersion: toSchema(RulesConfigVersionSchema, "output"),
+        Metrics: toSchema(MetricsSchema, "output"),
+        AuditVerification: toSchema(AuditVerificationSchema, "output"),
+      },
+    },
+  };
+}
