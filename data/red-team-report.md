@@ -52,7 +52,9 @@ En `dev/` también pasaron las trampas que pide el reto: duplicado (dev-08, dev-
 
 ## 3. Hallazgos
 
-Ordenados por importancia. Ninguno se corrigió: el motor y el lector están congelados desde la medición.
+Ordenados por importancia. El motor y el lector están congelados desde la medición.
+
+> **Actualización (18/10/2026):** A revisó H2, H3 y H4 contra la propuesta. El motor sigue la especificación en todos, así que se alinearon los **datos**, no las reglas (PR `fix(data): align expected outcomes with rules`): `adv-07` se rehízo con MXN 40.000,20 (USD 2.000,01 exactos, sin depender del redondeo) y su acuerdo se ajustó al mismo monto; `adv-12` se rehízo con la **emisión** fuera de la vigencia; `adv-08` pasa a ser un control que debe PAGAR; `adv-02` es un duplicado exacto (FRENAR); y `dev-20` y `holdout-08` esperan ESCALAR por R6. Con esto, corregir H1 ya no puede producir fugas por diferencias de criterio. Los resultados de la sección 1 son los de la corrida con los datos anteriores.
 
 ### H1. Las fechas ambiguas son la causa principal de la baja autonomía
 
