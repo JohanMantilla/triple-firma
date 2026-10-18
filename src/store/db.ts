@@ -40,8 +40,6 @@ export async function resetDb(db: Client): Promise<void> {
   await db.executeMultiple(SCHEMA);
 }
 
-let writeQueue: Promise<unknown> = Promise.resolve();
-
 // Runs fn in one write transaction (BEGIN IMMEDIATE): commits when it returns, rolls back when it throws.
 // ponytail: one queue per process, because a local file blocks the event loop while it waits for a lock
 // that this same process holds, and fails with SQLITE_BUSY. Turso queues writers across processes on
