@@ -100,7 +100,22 @@ export function basename(p: string): string {
   return parts[parts.length - 1];
 }
 
-export function loadExpected(csvText: string): ExpectedRow[] {
+/**
+ * expected.csv usa el formato que lee el pipeline (/api/metrics): file,expected_outcome,expected_rules,
+ * con reglas separadas por ";". Las justificaciones viven aparte (expected-justifications.csv:
+ * file,justification) porque el pipeline rechaza columnas de más.
+ */
+export function loadJustifications(csvText: string): Map<string, string> {
+  const [header = [], ...rows] = parseCsv(csvText);
+  const cols = header.map((h) => h.trim().toLowerCase());
+  const iFile = cols.indexOf("file");
+  const iJust = cols.indexOf("justification");
+  if (iFile < 0 || iJust < 0)
+    throw new Error(`justificaciones: se esperan las columnas "file,justification"`);
+  return new Map(rows.map((r) => [(r[iFile] ?? "").trim(), (r[iJust] ?? "").trim()]));
+}
+
+export function loadExpected(csvText: string, justificationsText = ""): ExpectedRow[] {
   const rows = parseCsv(csvText);
   if (rows.length === 0) throw new Error("expected.csv está vacío");
   const header = rows[0].map((h) => h.trim().toLowerCase());
@@ -110,10 +125,10 @@ export function loadExpected(csvText: string): ExpectedRow[] {
       throw new Error(`expected.csv: falta la columna "${name}" (columnas: ${header.join(", ")})`);
     return i;
   };
-  const iFile = idx("archivo");
-  const iDec = idx("decision_esperada");
-  const iRules = idx("reglas_esperadas");
-  const iJust = header.indexOf("justificacion");
+  const iFile = idx("file");
+  const iDec = idx("expected_outcome");
+  const iRules = idx("expected_rules");
+  const justifications = justificationsText ? loadJustifications(justificationsText) : new Map();
   const out: ExpectedRow[] = [];
   const seen = new Set<string>();
   rows.slice(1).forEach((r, n) => {
@@ -133,7 +148,7 @@ export function loadExpected(csvText: string): ExpectedRow[] {
       partition: partitionOf(file),
       decision,
       rules,
-      justification: iJust >= 0 ? (r[iJust] ?? "").trim() : "",
+      justification: justifications.get(file) ?? "",
     });
   });
   return out;

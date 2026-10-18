@@ -90,9 +90,11 @@ async function main() {
   const expected: ExpectedRow[] = [];
   const mainCsv = join(dataDir, "expected.csv");
   const holdCsv = join(dataDir, "expected-holdout.csv");
+  const readIfExists = (file: string) => (existsSync(file) ? readFileSync(file, "utf8") : "");
   if (partitions.some((p) => p !== "holdout")) {
     if (!existsSync(mainCsv)) fail(`No encuentro ${mainCsv}`);
-    expected.push(...loadExpected(readFileSync(mainCsv, "utf8")));
+    const justifications = readIfExists(join(dataDir, "expected-justifications.csv"));
+    expected.push(...loadExpected(readFileSync(mainCsv, "utf8"), justifications));
   }
   if (isHoldout) {
     if (!existsSync(holdCsv)) {
@@ -100,7 +102,8 @@ async function main() {
         `No encuentro ${holdCsv}.\nEl holdout está sellado: copia el contenido de _SELLADO_holdout/data/ dentro de data/ (solo en la corrida final) y vuelve a correr.`,
       );
     }
-    expected.push(...loadExpected(readFileSync(holdCsv, "utf8")));
+    const justifications = readIfExists(join(dataDir, "expected-holdout-justifications.csv"));
+    expected.push(...loadExpected(readFileSync(holdCsv, "utf8"), justifications));
   }
   const selected = expected.filter((e) => partitions.includes(e.partition));
   if (selected.length === 0) fail("No hay facturas esperadas para las particiones elegidas.");
