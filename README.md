@@ -185,7 +185,35 @@ Triple Firma se desarrolla alrededor de cuatro principios:
 - **Supervisión humana:** las operaciones que requieren autorización no deben ejecutarse automáticamente.
 - **Separación de responsabilidades:** la inteligencia artificial interpreta la información, mientras que el código aplica las reglas de negocio.
 
-## Estado del proyecto
+La base del deploy es `triple-firma-demo` y **solo quien despliega la reinicia**. La base compartida nunca va en `.env.local`: usa un archivo aparte, `.env.demo` (ya ignorado por git).
+
+1. Crea la base de la demo: `turso db create triple-firma-demo`, y copia su URL y un token.
+2. Importa el repo en Vercel y agrega `TURSO_DATABASE_URL` y `TURSO_AUTH_TOKEN`. **No** agregues `ANTHROPIC_API_KEY`: la URL pública funciona desde la caché, y una factura nueva se escala por seguridad.
+3. Carga la base desde tu máquina con esas variables en `.env.demo`: `npx tsx --env-file=.env.demo scripts/demo.ts`.
+4. Abre la URL y comprueba que `GET /api/decisions` responde y que `GET /api/audit/verify` devuelve `isValid: true`. La aprobación desde la bandeja llegará con el endpoint de aprobaciones.
+
+> **Advertencia:** el paso 3 **reinicia la base a la que apunta** `.env.demo`. Además, `PUT /api/config` y `POST /api/approvals/{decisionId}` exigen la clave `HUMAN_ACTIONS_KEY` en el encabezado `x-api-key`; en producción, sin esa variable responden 401.
+
+## Plan B sin internet
+
+Con `TURSO_DATABASE_URL=file:local.db` en `.env.local`, `npm run demo` funciona igual con un archivo local, sin red.
+
+## Estructura
+
+```
+src/
+├── contracts/    # Esquemas Zod y tipos compartidos
+├── app/          # Pantallas (frontend) y app/api/ (backend)
+├── components/   # Componentes de la UI
+├── lib/          # api-client.ts y datos de ejemplo
+├── pipeline/     # Orquesta el flujo de una factura
+├── engine/       # Motor de reglas (puro, sin I/O)
+├── extraction/   # Lector con LLM y normalizador
+└── store/        # Base de datos (libSQL / Turso) y registro de auditoría
+data/             # Configuración de la empresa ficticia y facturas
+scripts/          # Generador de facturas, evaluación y demo
+tests/            # Pruebas
+```
 
 Triple Firma está en desarrollo. El objetivo es integrar el motor de decisiones, la extracción de información y la interfaz de usuario en un flujo coherente que permita probar las decisiones sobre un conjunto de facturas.
 

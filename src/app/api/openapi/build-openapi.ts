@@ -38,6 +38,8 @@ const idParameter = (description: string) => ({
 });
 
 const NOT_FOUND = errorResponse("No existe.", ["NOT_FOUND"]);
+const UNAUTHORIZED = errorResponse("Falta la clave o es incorrecta.", ["UNAUTHORIZED"]);
+const HUMAN_KEY_SECURITY = [{ humanKey: [] }];
 
 const PATHS = {
   "/api/health": {
@@ -169,6 +171,7 @@ const PATHS = {
       description:
         "Úsalo solo con autorización de una persona: aprueba o rechaza una decisión escalada y todavía no hay autenticación. Al aprobar se revalidan duplicados (R2) y presupuesto (R6) en ese momento; si alguna falla, la decisión termina en FRENAR y la respuesta es 200 con `approval.revalidationResults`.",
       "x-human-only": true,
+      security: HUMAN_KEY_SECURITY,
       parameters: [
         {
           name: "decisionId",
@@ -185,6 +188,7 @@ const PATHS = {
           ...jsonBody("DecisionRecord"),
         },
         "400": errorResponse("Solicitud inválida; `issues` lista los campos.", ["INVALID_REQUEST"]),
+        "401": UNAUTHORIZED,
         "404": NOT_FOUND,
         "409": errorResponse("No se puede resolver.", [
           "NOT_ESCALATED",
@@ -212,10 +216,12 @@ const PATHS = {
       description:
         "Úsalo solo con autorización de una persona: crea una versión nueva de las reglas y todavía no hay autenticación.",
       "x-human-only": true,
+      security: HUMAN_KEY_SECURITY,
       requestBody: { required: true, ...jsonBody("RulesConfigInput") },
       responses: {
         "200": { description: "Versión guardada.", ...jsonBody("RulesConfigVersion") },
         "400": errorResponse("Reglas inválidas; `issues` lista los campos.", ["INVALID_REQUEST"]),
+        "401": UNAUTHORIZED,
       },
     },
   },
@@ -263,6 +269,14 @@ export function buildOpenApiDocument() {
     ],
     paths: PATHS,
     components: {
+      securitySchemes: {
+        humanKey: {
+          type: "apiKey",
+          in: "header",
+          name: "x-api-key",
+          description: "Clave HUMAN_ACTIONS_KEY, que solo conocen las personas autorizadas.",
+        },
+      },
       schemas: {
         ApiError: toSchema(ApiErrorSchema, "output"),
         DecisionRecord: toSchema(DecisionRecordSchema, "output"),

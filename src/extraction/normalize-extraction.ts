@@ -118,21 +118,57 @@ function toIsoDate(year: string, month: number | string, day: number | string): 
 
 const NUMERIC_DATE = /^(\d{1,4})([/.-])(\d{1,2})\2(\d{1,4})$/;
 
+type YearLastDate = { first: number; second: number; year: string; separator: string };
+
+// "30/10/2026": two small numbers and a 4-digit year last. The order of the first two is not known.
+function splitYearLastDate(text: string): YearLastDate | null {
+  const match = NUMERIC_DATE.exec(text);
+  const [, first = "", separator = "", second = "", year = ""] = match ?? [];
+  if (!match || year.length !== 4 || first.length > 2) return null;
+  return { first: Number(first), second: Number(second), year, separator };
+}
+
 // "2026-10-30" and "30/10/2026" (day first only when the order is unambiguous).
 function parseNumericDate(text: string): string | null {
   const match = NUMERIC_DATE.exec(text);
   if (!match) return null;
   const [, first = "", , second = "", third = ""] = match;
-
   if (first.length === 4 && third.length <= 2) return toIsoDate(first, second, third);
-  if (third.length !== 4 || first.length > 2) return null;
 
-  const a = Number(first);
-  const b = Number(second);
-  if (a === b) return toIsoDate(third, b, a);
-  if (a > 12 && b <= 12) return toIsoDate(third, b, a);
-  if (b > 12 && a <= 12) return toIsoDate(third, a, b);
+  const date = splitYearLastDate(text);
+  if (!date) return null;
+  const { first: a, second: b, year } = date;
+  if (a === b) return toIsoDate(year, b, a);
+  if (a > 12 && b <= 12) return toIsoDate(year, b, a);
+  if (b > 12 && a <= 12) return toIsoDate(year, a, b);
   return null;
+}
+
+type DateOrder = "DMY" | "MDY";
+
+// The order a numeric date proves by itself: "18/10/2026" can only be day first. Null when the date
+// is ambiguous or not a real date.
+function provenDateOrder(text: string): { order: DateOrder; separator: string } | null {
+  const date = splitYearLastDate(text);
+  if (!date || parseNumericDate(text) === null) return null;
+  if (date.first > 12) return { order: "DMY", separator: date.separator };
+  if (date.second > 12) return { order: "MDY", separator: date.separator };
+  return null;
+}
+
+// Reads an ambiguous date ("03/04/2026") in the order another date of the same document proves.
+// Only a numeric date with the same separator counts: a month name or an ISO date says nothing
+// about how this writer orders day and month.
+function inferDateOrder(text: string, evidenceText: string | null): string | null {
+  const date = splitYearLastDate(text);
+  const isAmbiguous =
+    date !== null && date.first !== date.second && Math.max(date.first, date.second) <= 12;
+  if (!isAmbiguous || evidenceText === null) return null;
+  const proof = provenDateOrder(evidenceText);
+  if (proof?.separator !== date.separator) return null;
+  return proof.order === "DMY"
+    ? toIsoDate(date.year, date.second, date.first)
+    : toIsoDate(date.year, date.first, date.second);
 }
 
 // "Oct 30, 2026", "30 October 2026", "30 de octubre de 2026": exactly one month name, a day and a year.
@@ -165,6 +201,32 @@ export function normalizeDate(raw: string): string | null {
   return parseNumericDate(text) ?? parseNamedMonthDate(text);
 }
 
+type ResolvedDate = { value: string | null; isInferred: boolean };
+
+// Both dates of one document, each read alone and, when that is ambiguous, in the order the other
+// date proves. As a control, an inferred date that puts the due date before the issue date is
+// dropped: a wrong guess then escalates instead of passing.
+export function resolveDocumentDates(
+  issueRaw: string | null,
+  dueRaw: string | null,
+): { issueDate: ResolvedDate; dueDate: ResolvedDate } {
+  const resolve = (raw: string | null, other: string | null): ResolvedDate => {
+    if (raw === null) return { value: null, isInferred: false };
+    const alone = normalizeDate(raw);
+    if (alone !== null) return { value: alone, isInferred: false };
+    const inferred = inferDateOrder(raw.trim(), other?.trim() ?? null);
+    return { value: inferred, isInferred: inferred !== null };
+  };
+  const issueDate = resolve(issueRaw, dueRaw);
+  const dueDate = resolve(dueRaw, issueRaw);
+
+  const isInverted =
+    issueDate.value !== null && dueDate.value !== null && dueDate.value < issueDate.value;
+  const drop = (date: ResolvedDate): ResolvedDate =>
+    date.isInferred && isInverted ? { value: null, isInferred: false } : date;
+  return { issueDate: drop(issueDate), dueDate: drop(dueDate) };
+}
+
 // ── Extraction ───────────────────────────────────────────────────────────────
 
 type NormalizedField<T> = {
@@ -179,6 +241,7 @@ function buildField<T>(
   source: ReaderField,
   schema: z.ZodType<T>,
   candidate: unknown,
+  isResolved = false,
 ): NormalizedField<T> {
   const parsed = schema.safeParse(candidate);
   const value = parsed.success ? parsed.data : null;
@@ -186,7 +249,8 @@ function buildField<T>(
     raw: source.raw,
     value,
     evidence: source.evidence,
-    isUncertain: source.isUncertain || value === null,
+    // A date resolved from the rest of the document no longer needs the reader's ambiguity flag.
+    isUncertain: (source.isUncertain && !(isResolved && value !== null)) || value === null,
   };
 }
 
@@ -202,6 +266,7 @@ export function normalizeExtraction(response: ReaderResponse): Extraction {
   } = response;
   // Each item as printed; an unreadable one stays null in its place so R10 escalates it. R10 adds them up.
   const lineItemAmountsMinor = lineItemAmountStrings.map(normalizeAmount);
+  const dates = resolveDocumentDates(issueDateString.raw, dueDateString.raw);
 
   return {
     payee: buildField(payee, PayeeNameSchema, payee.value?.trim()),
@@ -218,12 +283,14 @@ export function normalizeExtraction(response: ReaderResponse): Extraction {
     issueDate: buildField(
       issueDateString,
       IsoDateSchema,
-      issueDateString.raw ? normalizeDate(issueDateString.raw) : null,
+      dates.issueDate.value,
+      dates.issueDate.isInferred,
     ),
     dueDate: buildField(
       dueDateString,
       IsoDateSchema,
-      dueDateString.raw ? normalizeDate(dueDateString.raw) : null,
+      dates.dueDate.value,
+      dates.dueDate.isInferred,
     ),
     reference: buildField(reference, ReferenceSchema, reference.value?.trim()),
     lineItemsSumMinor: null,
