@@ -1,6 +1,7 @@
 import { ApprovalRequestSchema } from "@/contracts/approval";
 import { resolveApproval } from "@/pipeline/resolve-approval";
 import { getDb } from "@/store/db";
+import { requireHumanKey } from "../../require-human-key";
 import { jsonError } from "../../responses";
 
 const STATUS_BY_REASON = {
@@ -16,6 +17,9 @@ export async function POST(
   request: Request,
   ctx: RouteContext<"/api/approvals/[decisionId]">,
 ): Promise<Response> {
+  const denied = requireHumanKey(request);
+  if (denied !== null) return denied;
+
   const parsed = ApprovalRequestSchema.safeParse(await request.json().catch(() => undefined));
   if (!parsed.success) return jsonError(400, "INVALID_REQUEST", parsed.error.issues);
 

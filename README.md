@@ -140,7 +140,7 @@ La base del deploy es `triple-firma-demo` y **solo quien despliega la reinicia**
 3. Carga la base desde tu máquina con esas variables en `.env.demo`: `npx tsx --env-file=.env.demo scripts/demo.ts`.
 4. Abre la URL y comprueba que `GET /api/decisions` responde y que `GET /api/audit/verify` devuelve `isValid: true`. La aprobación desde la bandeja llegará con el endpoint de aprobaciones.
 
-> **Advertencia:** el paso 3 **reinicia la base a la que apunta** `.env.demo`. Además, `PUT /api/config` (y la futura aprobación de escaladas) no tiene autenticación: no compartas el deploy público más allá del jurado hasta protegerlas.
+> **Advertencia:** el paso 3 **reinicia la base a la que apunta** `.env.demo`. Además, `PUT /api/config` y `POST /api/approvals/{decisionId}` exigen la clave `HUMAN_ACTIONS_KEY` en el encabezado `x-api-key`; en producción, sin esa variable responden 401.
 
 ## Plan B sin internet
 
