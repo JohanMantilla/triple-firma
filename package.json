@@ -15,6 +15,9 @@
     "test:watch": "vitest",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "eval": "tsx scripts/eval.ts",
+    "eval:holdout": "tsx scripts/eval.ts --holdout",
+    "check:data": "tsx scripts/check-data.ts",
     "demo": "tsx --env-file-if-exists=.env.local scripts/demo.ts && next dev",
     "demo:live": "tsx --env-file-if-exists=.env.local scripts/demo.ts --live && next dev",
     "demo:tamper": "tsx --env-file-if-exists=.env.local scripts/demo-tamper.ts"

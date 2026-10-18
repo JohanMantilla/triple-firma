@@ -2,7 +2,8 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { Client } from "@libsql/client";
 import type { ExpectedDecision } from "@/contracts/metrics";
-import { type RulesConfig, RulesConfigSchema } from "@/contracts/rules-config";
+import type { RulesConfig } from "@/contracts/rules-config";
+import { toRulesConfig } from "./company-config";
 import { parseExpectedCsv } from "./compute-metrics";
 import { detectSourceFormat, processInvoice, type ProcessInvoiceResult } from "./process-invoice";
 
@@ -18,7 +19,7 @@ export const DATA_DIR = path.join(process.cwd(), "data");
 
 export async function readCompanyConfig(dataDir = DATA_DIR): Promise<RulesConfig> {
   const text = await readFile(path.join(dataDir, "config", "company.json"), "utf8");
-  return RulesConfigSchema.parse(JSON.parse(text));
+  return toRulesConfig(JSON.parse(text));
 }
 
 // One file at a time, sorted by name: duplicates and the budget depend on the order. Files that are
