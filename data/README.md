@@ -15,6 +15,7 @@ data/
 ├── expected.csv                resultado esperado de las 36 (escrito a mano; ver §6)
 ├── expected-justifications.csv por qué se espera cada resultado (ver §6)
 ├── extraction-truth.json       qué DICE cada documento (para medir al Lector de B campo por campo)
+├── red-team-report.md          resultados finales, trampas y hallazgos del Red Team
 └── reports/                    aquí caen los reportes de `npm run eval`
 scripts/
 ├── eval.ts · eval-lib.ts       el evaluador
