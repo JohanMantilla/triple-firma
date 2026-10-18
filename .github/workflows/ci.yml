@@ -9,6 +9,28 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
+      # Squash merge turns the PR title into the commit on main, so it must follow the convention in
+      # CLAUDE.md. Title and branch come from the PR author: they are read from env, never inlined.
+      - name: Check PR title and branch name
+        if: github.event_name == 'pull_request'
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          types='feat|fix|test|refactor|docs|chore|ci|style'
+          scopes='contracts|engine|extraction|store|pipeline|api|ui|data|scripts'
+          title_pattern="^($types)(\(($scopes)\))?!?: [a-z0-9].*[^.]$"
+          branch_pattern="^($types)/(($scopes)-)?[a-z0-9]+(-[a-z0-9]+)*$"
+          status=0
+          if ! printf '%s\n' "$TITLE" | grep -Eq "$title_pattern" || [ "${#TITLE}" -gt 72 ]; then
+            echo "::error::PR title \"$TITLE\" must be '<type>(<scope>): <description>': lowercase, imperative, no trailing period, 72 characters max. Example: feat(data): add dev invoice set"
+            status=1
+          fi
+          if ! printf '%s\n' "$BRANCH" | grep -Eq "$branch_pattern"; then
+            echo "::error::Branch \"$BRANCH\" must be '<type>/<scope>-<topic>' in lowercase. Example: feat/data-dev-invoices"
+            status=1
+          fi
+          exit $status
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
