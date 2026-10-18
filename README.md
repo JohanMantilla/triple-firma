@@ -162,6 +162,20 @@ npm run build
 
 Consulta `package.json` para verificar los scripts disponibles en la versión actual.
 
+## Comandos
+
+| Comando             | Qué hace                                                |
+| ------------------- | ------------------------------------------------------- |
+| `npm run dev`       | Backend (:3000) y frontend Vite (:5173) a la vez        |
+| `npm run dev:api`   | Solo el backend                                         |
+| `npm run build:web` | Compila el frontend Vite a `frontend/dist`              |
+| `npm run lint`      | ESLint, incluida la regla de dependencias entre módulos |
+| `npm run typecheck` | Revisión de tipos de TypeScript                         |
+| `npm test`          | Pruebas con Vitest                                      |
+| `npm run format`    | Formatea el código con Prettier                         |
+| `npm run build`     | Build de producción                                     |
+| `npm run demo`      | Carga el set de facturas y abre la app     |
+
 ## Principios de diseño
 
 Triple Firma se desarrolla alrededor de cuatro principios:
