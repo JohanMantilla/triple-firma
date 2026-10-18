@@ -1,186 +1,173 @@
 # Triple Firma
 
-> El LLM **lee**, el código **decide**, la persona **autoriza**.
+**Agente inteligente para la gestión, validación y toma de decisiones sobre facturas empresariales.**
 
-Agente que revisa las facturas de una empresa y decide si **pagarlas**, **frenarlas** o **escalarlas** a una persona, dentro de las reglas que la empresa define. Cada decisión queda registrada y explicada. Proyecto para el reto Blinka.
+Triple Firma es un proyecto que busca automatizar la revisión de facturas y ayudar a las empresas a tomar decisiones de pago de forma más segura, transparente y controlada.
 
-> La propuesta completa está en [docs/PROPUESTA.md](docs/PROPUESTA.md).
+El sistema combina inteligencia artificial para interpretar la información de las facturas con un motor de reglas determinista que evalúa las condiciones establecidas por la empresa. Cuando una operación requiere supervisión, el sistema la deja pendiente para que una persona pueda revisarla y autorizarla.
 
-## Cómo funciona
+> **La IA interpreta. El código decide. La persona autoriza.**
 
-1. **Lector (LLM):** extrae de la factura a quién se paga, cuánto, en qué moneda, para cuándo y la referencia, con evidencia. No ve las reglas ni los límites.
-2. **Motor de reglas (código determinista):** evalúa todas las reglas y decide PAGAR, FRENAR o ESCALAR. Gana la decisión más restrictiva.
-3. **Persona:** aprueba o rechaza lo escalado desde la bandeja.
+## El problema
 
-Todo queda en un registro append-only con hash encadenado.
+Las empresas reciben facturas constantemente y deben comprobar que sean correctas antes de procesar sus pagos. Este proceso puede consumir tiempo y provocar errores cuando existen documentos duplicados, importes incorrectos, gastos fuera del presupuesto o información sospechosa.
 
-## Requisitos
+Depender exclusivamente de una revisión manual ralentiza las operaciones. Por otro lado, permitir que un modelo de inteligencia artificial decida y ejecute pagos sin controles suficientes puede introducir riesgos financieros.
 
-- **Node.js 24 LTS** (ver `.nvmrc`). Descárgalo de https://nodejs.org (versión "LTS"). npm viene incluido.
-- **Git**
+## Nuestra solución
 
-Comprueba que los tienes:
+Triple Firma propone un agente de decisiones financieras que analiza las facturas y aplica las reglas definidas por cada empresa.
 
-```bash
-node -v   # debe mostrar v24.x
-npm -v
-git --version
+El objetivo es que el equipo financiero pueda consultar qué decidió el agente, qué operaciones bloqueó, cuáles dejó pendientes de aprobación y las razones detrás de cada decisión.
+
+## Funcionalidades principales
+
+- **Análisis de facturas:** extracción e interpretación de la información relevante mediante inteligencia artificial.
+- **Motor de reglas:** evaluación de las facturas mediante condiciones explícitas y verificables.
+- **Detección de duplicados:** identificación de posibles facturas repetidas.
+- **Validación financiera:** comprobación de importes, presupuestos y otros criterios configurados.
+- **Control de riesgos:** identificación de inconsistencias que requieren una revisión adicional.
+- **Aprobación humana:** posibilidad de dejar decisiones pendientes cuando las reglas lo requieren.
+- **Trazabilidad:** explicación de las decisiones para facilitar su revisión.
+- **Panel de control:** visualización del estado de las facturas y las decisiones del agente.
+
+*El alcance efectivo de cada funcionalidad depende de su nivel de implementación e integración en la versión actual del proyecto.*
+
+## ¿Cómo funciona?
+
+1. **Recepción:** el sistema recibe una factura para su análisis.
+2. **Extracción:** se identifican los datos relevantes, como proveedor, importe, moneda y fecha de vencimiento.
+3. **Validación:** se comprueba la información extraída y se evalúan las reglas empresariales.
+4. **Decisión:** el motor determina si la factura puede continuar, debe bloquearse o necesita aprobación humana.
+5. **Explicación:** se registra el resultado y el motivo de la decisión.
+6. **Supervisión:** el equipo responsable puede revisar las operaciones pendientes y actuar cuando corresponda.
+
+### Flujo de decisión
+
+```text
+Factura recibida
+       |
+       v
+Extracción de información con IA
+       |
+       v
+Validación de datos
+       |
+       v
+Evaluación del motor de reglas
+       |
+       v
+Decisión del sistema
+       |
+       +----> Aprobada según las reglas
+       |
+       +----> Bloqueada por una regla
+       |
+       +----> Pendiente de aprobación humana
 ```
 
-> **¿Tu red bloquea nodejs.org?** Descarga el instalador desde el espejo https://npmmirror.com/mirrors/node/ (carpeta `v24.x`, archivo `node-v24.x-x64.msi` en Windows). Después de instalar, **cierra y vuelve a abrir la terminal o VS Code** para que reconozca `node`.
+**Importante:** aprobar una factura dentro del flujo de decisión no significa necesariamente que el dinero haya sido transferido. La ejecución real de pagos requiere una integración específica y sus correspondientes controles de autorización.
 
-## Puesta en marcha
+## Arquitectura y tecnologías
 
-**1. Clona el repo e instala las dependencias** (solo la primera vez):
+Triple Firma utiliza tecnologías modernas para construir una aplicación web con lógica de negocio validable y una interfaz orientada a la toma de decisiones.
+
+| Tecnología | Uso |
+|---|---|
+| Next.js | Framework de la aplicación web |
+| React | Construcción de la interfaz |
+| TypeScript | Tipado y mayor seguridad durante el desarrollo |
+| Tailwind CSS | Estilos y diseño de la interfaz |
+| Anthropic SDK | Integración con modelos de inteligencia artificial |
+| Zod | Validación de datos y estructuras |
+| LibSQL | Acceso a datos mediante una base de datos compatible |
+| Vitest | Pruebas automatizadas |
+
+## Estructura del proyecto
+
+```text
+triple-firma/
+├── src/
+│   ├── app/
+│   │   ├── decisions/
+│   │   ├── inbox/
+│   │   ├── rules/
+│   │   └── page.tsx
+│   ├── components/
+│   ├── contracts/
+│   ├── engine/
+│   │   └── rules/
+│   └── extraction/
+├── package.json
+└── README.md
+```
+
+- `src/app/`: rutas y páginas de la aplicación.
+- `src/components/`: componentes reutilizables de la interfaz.
+- `src/contracts/`: contratos y estructuras de datos.
+- `src/engine/`: lógica central para evaluar y tomar decisiones.
+- `src/engine/rules/`: reglas que determinan el resultado de las evaluaciones.
+- `src/extraction/`: lógica relacionada con la extracción de información de las facturas.
+
+La estructura puede evolucionar a medida que se integren las distintas partes del sistema.
+
+## Instalación y ejecución
+
+### Requisitos previos
+
+- Node.js en la versión 24 o superior.
+- npm.
+- Una clave de API de Anthropic si la funcionalidad de extracción utiliza ese proveedor.
+
+### 1. Clonar el repositorio
 
 ```bash
-git clone <url-del-repo>
+git clone https://github.com/JohanMantilla/triple-firma.git
 cd triple-firma
+```
+
+### 2. Instalar las dependencias
+
+```bash
 npm install
 ```
 
-> **¿Tu red bloquea el registro de npm?** Antes de `npm install`, usa el espejo solo en tu máquina, sin cambiar el repo:
-> `npm config set registry https://registry.npmmirror.com/`
+### 3. Configurar las variables de entorno
 
-**2. Crea tu archivo de variables locales** (solo la primera vez):
+Crea un archivo `.env.local` en la raíz del proyecto y añade las variables que requiera la aplicación.
 
-```bash
-# macOS / Linux / Git Bash
-cp .env.example .env.local
-```
+Por ejemplo, si el código utiliza Anthropic, podría necesitar una clave como `ANTHROPIC_API_KEY`. Confirma el nombre exacto en el archivo de ejemplo de variables de entorno o en la configuración del proyecto.
 
-```powershell
-# Windows PowerShell
-copy .env.example .env.local
-```
+No subas claves privadas, contraseñas ni credenciales al repositorio.
 
-Con eso ya puedes trabajar en la UI: usa datos de ejemplo (`NEXT_PUBLIC_USE_MOCK_API=true`) y no necesita secretos. `ANTHROPIC_API_KEY` solo se necesita para leer facturas con el modelo de verdad.
-
-**Si vas a correr el backend** (la API o `npm run demo`), crea **tu propia** base de datos en Turso. Es gratis, y cada persona usa la suya porque `npm run demo` la borra y la vuelve a cargar:
-
-1. Crea una cuenta en https://turso.tech e instala la CLI `turso` (en Windows, úsala desde WSL o crea la base en el panel web).
-2. Crea la base y copia sus datos en `.env.local`:
-
-```bash
-turso auth login
-turso db create triple-firma-<tu-nombre>
-turso db show triple-firma-<tu-nombre> --url     # va en TURSO_DATABASE_URL
-turso db tokens create triple-firma-<tu-nombre>  # va en TURSO_AUTH_TOKEN
-```
-
-> **¿Sin internet?** Pon `TURSO_DATABASE_URL=file:local.db` en `.env.local`: todo funciona igual con un archivo local (es el plan B de la presentación).
-
-**3. Inicia la app:**
+### 4. Iniciar el servidor de desarrollo
 
 ```bash
 npm run dev
 ```
 
-**4. Comprueba que funciona** en el navegador:
+Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
 
-| URL                              | Qué debes ver                           |
-| -------------------------------- | --------------------------------------- |
-| http://localhost:3000            | La página "Triple Firma"                |
-| http://localhost:3000/api/health | `{"status":"ok"}` (el backend responde) |
-
-Para detener la app: `Ctrl + C` en la terminal.
-
-**5. Antes de cada commit**, comprueba que todo sigue en verde (es lo mismo que corre la CI en GitHub):
+### 5. Ejecutar las pruebas
 
 ```bash
-npm run lint
-npm run typecheck
-npm test
+npm run test
 ```
 
-**Cada vez que hagas `git pull`** y cambie `package.json`, vuelve a correr `npm install`.
+### 6. Comprobar la compilación
 
-## Comandos
-
-| Comando             | Qué hace                                                |
-| ------------------- | ------------------------------------------------------- |
-| `npm run dev`       | Servidor de desarrollo                                  |
-| `npm run lint`      | ESLint, incluida la regla de dependencias entre módulos |
-| `npm run typecheck` | Revisión de tipos de TypeScript                         |
-| `npm test`          | Pruebas con Vitest                                      |
-| `npm run format`    | Formatea el código con Prettier                         |
-| `npm run build`     | Build de producción                                     |
-| `npm run demo`      | Carga el set de facturas y abre la app (ver "Demo")     |
-
-## Demo
-
-| Comando               | Qué hace                                                                                                                                                               |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run demo`        | Reinicia **tu** base de Turso, carga las reglas de Andes Labs y decide `dev/` y `adversarial/` desde la caché, sin API key ni tokens. Luego abre http://localhost:3000 |
-| `npm run demo:live`   | Igual, pero si una factura no está en caché la lee con el modelo (requiere `ANTHROPIC_API_KEY`) y guarda la lectura en `data/cache/`                                   |
-| `npm run demo:tamper` | Altera una entrada del registro directamente en la base, como podría hacerlo alguien con acceso a ella. El botón **Verificar integridad** la detecta                   |
-
-Todas las facturas del set se deciden con el mismo reloj fijo (`DATASET_NOW`), así que el resultado no depende del día en que se corra.
-
-Un archivo cuya extracción falló queda en ESCALATE para esos mismos bytes (es idempotente por hash): para reintentar hay que cambiar el archivo.
-
-## API
-
-| Método | Ruta                      | Para qué                                                      |
-| ------ | ------------------------- | ------------------------------------------------------------- |
-| `POST` | `/api/invoices`           | Subir una factura (campo `file`: PDF, imagen, `.eml`, `.txt`) |
-| `GET`  | `/api/invoices/[id]/file` | Ver el documento original                                     |
-| `GET`  | `/api/decisions?status=…` | Listar decisiones (`PENDING_APPROVAL` = bandeja)              |
-| `GET`  | `/api/decisions/[id]`     | Detalle: datos extraídos, reglas, explicación y aprobación    |
-| `GET`  | `/api/config` · `PUT`     | Leer o guardar las reglas (cada cambio es una versión nueva)  |
-| `GET`  | `/api/audit/verify`       | Verificar la cadena de hashes del registro                    |
-| `GET`  | `/api/metrics`            | Métricas contra `data/expected.csv`                           |
-
-## Deploy (Vercel + Turso)
-
-La base del deploy es `triple-firma-demo` y **solo quien despliega la reinicia**. La base compartida nunca va en `.env.local`: usa un archivo aparte, `.env.demo` (ya ignorado por git).
-
-1. Crea la base de la demo: `turso db create triple-firma-demo`, y copia su URL y un token.
-2. Importa el repo en Vercel y agrega `TURSO_DATABASE_URL` y `TURSO_AUTH_TOKEN`. **No** agregues `ANTHROPIC_API_KEY`: la URL pública funciona desde la caché, y una factura nueva se escala por seguridad.
-3. Carga la base desde tu máquina con esas variables en `.env.demo`: `npx tsx --env-file=.env.demo scripts/demo.ts`.
-4. Abre la URL y comprueba que `GET /api/decisions` responde y que `GET /api/audit/verify` devuelve `isValid: true`. La aprobación desde la bandeja llegará con el endpoint de aprobaciones.
-
-> **Advertencia:** el paso 3 **reinicia la base a la que apunta** `.env.demo`. Además, `PUT /api/config` (y la futura aprobación de escaladas) no tiene autenticación: no compartas el deploy público más allá del jurado hasta protegerlas.
-
-## Plan B sin internet
-
-Con `TURSO_DATABASE_URL=file:local.db` en `.env.local`, `npm run demo` funciona igual con un archivo local, sin red.
-
-## Estructura
-
-```
-src/
-├── contracts/    # Esquemas Zod y tipos compartidos
-├── app/          # Pantallas (frontend) y app/api/ (backend)
-├── components/   # Componentes de la UI
-├── lib/          # api-client.ts y datos de ejemplo
-├── pipeline/     # Orquesta el flujo de una factura
-├── engine/       # Motor de reglas (puro, sin I/O)
-├── extraction/   # Lector con LLM y normalizador
-└── store/        # Base de datos (libSQL / Turso) y registro de auditoría
-data/             # Configuración de la empresa ficticia y facturas
-scripts/          # Generador de facturas, evaluación y demo
-tests/            # Pruebas
+```bash
+npm run build
 ```
 
-## Tecnologías
+Consulta `package.json` para verificar los scripts disponibles en la versión actual.
 
-Next.js 16 · TypeScript · Node 24 LTS · Zod · libSQL / Turso · SDK de Anthropic · Tailwind CSS · Vitest · Vercel
+## Principios de diseño
 
-## Para el equipo
+Triple Firma se desarrolla alrededor de cuatro principios:
 
-Las reglas de código, el glosario de nombres y el formato de commits están en [CLAUDE.md](CLAUDE.md). Léelo antes de tu primer commit.
+- **Control:** las decisiones financieras deben respetar reglas explícitas.
+- **Transparencia:** cada resultado debe tener una explicación comprensible.
+- **Supervisión humana:** las operaciones que requieren autorización no deben ejecutarse automáticamente.
+- **Separación de responsabilidades:** la inteligencia artificial interpreta la información, mientras que el código aplica las reglas de negocio.
 
-## Restricciones
-
-- Ningún dato real de clientes ni de empresas: todo el set es ficticio.
-- No se mueve dinero real ni se conecta a ninguna plataforma de pagos.
-- No es detección de fraude, cumplimiento ni verificación de identidad.
-
-## Límites conocidos
-
-Los encontramos al auditar el motor y decidimos no cambiar las reglas antes de la demo.
-
-- **La misma factura con una etiqueta en la referencia.** Una factura es duplicada si coinciden beneficiario, monto, moneda y referencia. La referencia ignora mayúsculas, espacios, guiones, barras y puntos ("FAC-1041" es "fac 1041"), pero no una etiqueta pegada al número: "N° FAC-1041" y "FAC-1041" no se reconocen como la misma factura, que podría pagarse otra vez. En nuestro set el Lector copia solo el número ("Factura N°: FAC-1041" → "FAC-1041"), y si sus dos lecturas no coinciden, la factura se escala.
-- **Una copia con un nombre parecido.** "Acmé Corp" frente a "Acme Corp", o con una letra cirílica, no se marca como duplicado, pero se escala por nombre parecido y la decide una persona.
-- **Números distintos son facturas distintas.** "FAC-41" y "FAC-1041", o "FAC-1041" y "ED_1041", no son duplicados. El mismo número con otro monto tampoco: si no coincide con lo acordado, se frena o se escala.
