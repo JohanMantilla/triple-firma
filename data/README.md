@@ -24,7 +24,7 @@ scripts/
 tests/eval-lib.test.ts          pruebas del evaluador (Vitest)
 ```
 
-El **holdout (8 facturas)** NO está en `data/`: vive en `_SELLADO_holdout/` hasta la corrida final (§5).
+El **holdout (8 facturas)** está en `data/invoices/holdout/` desde la corrida final (§5). Antes vivía sellado fuera de git.
 
 ## 2. La empresa
 
@@ -71,9 +71,10 @@ El `expected.csv` está escrito desde la propuesta (§3), pero la propuesta deja
 
 ## 5. El holdout está sellado
 
-- 8 facturas con su propio historial y resultado esperado, en `_SELLADO_holdout/` (**fuera de `data/` y fuera de git**).
-- Nadie (ni A, ni B, ni los subagentes) lo abre ni ajusta contra él. Lo corre **C una sola vez**, sábado 10 pm.
-- Para la corrida final: `cp -R _SELLADO_holdout/data/. data/` y luego `npm run eval:holdout`.
+- 8 facturas con su propio historial y resultado esperado: `invoices/holdout/`, `expected-holdout.csv`, `expected-holdout-justifications.csv`, `extraction-truth-holdout.json` y `config/seeds/holdout.json`.
+- Estuvo sellado fuera de git hasta la corrida final. **C lo corrió una sola vez**, después del freeze confirmado por A, sobre `main` `82bd09278b583ef27d2ddfc8cac2803f713c11cf`, con `data/cache/` vacío y lectura real.
+- Resultado: **0 fugas**, exactitud 5/8, autonomía 2/5, explicabilidad 8/8. Nadie ajusta reglas ni prompts contra estos resultados.
+- Para reproducirlo: `npx tsx --env-file=.env.local scripts/eval.ts --holdout` (requiere `ANTHROPIC_API_KEY`).
 - Qué mide: si lo que se ajustó con `dev/` **generaliza** a facturas que el equipo nunca vio.
 
 ## 6. `expected.csv` y la regla de independencia
