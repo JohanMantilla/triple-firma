@@ -12,6 +12,7 @@ export const ApiErrorCodeSchema = z.enum([
   "NOT_FOUND",
   "NOT_ESCALATED",
   "ALREADY_RESOLVED",
+  "UNAUTHORIZED",
 ]);
 export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>;
 
