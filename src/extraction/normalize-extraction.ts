@@ -198,11 +198,10 @@ export function normalizeExtraction(response: ReaderResponse): Extraction {
     issueDateString,
     dueDateString,
     reference,
-    lineItemsSumString,
+    lineItemAmountStrings,
   } = response;
-  const lineItemsSumMinor = lineItemsSumString?.raw
-    ? normalizeAmount(lineItemsSumString.raw)
-    : null;
+  // Each item as printed; an unreadable one stays null in its place so R10 escalates it. R10 adds them up.
+  const lineItemAmountsMinor = lineItemAmountStrings.map(normalizeAmount);
 
   return {
     payee: buildField(payee, PayeeNameSchema, payee.value?.trim()),
@@ -227,7 +226,8 @@ export function normalizeExtraction(response: ReaderResponse): Extraction {
       dueDateString.raw ? normalizeDate(dueDateString.raw) : null,
     ),
     reference: buildField(reference, ReferenceSchema, reference.value?.trim()),
-    lineItemsSumMinor,
+    lineItemsSumMinor: null,
+    lineItemAmountsMinor: lineItemAmountsMinor.length === 0 ? null : lineItemAmountsMinor,
     suspiciousText: response.suspiciousText,
   };
 }

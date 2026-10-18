@@ -22,7 +22,7 @@ const READER_RESPONSE: ReaderResponse = {
   issueDateString: field("Oct 1, 2026", "2026-10-01"),
   dueDateString: field("Oct 30, 2026", "2026-10-30"),
   reference: field("INV-102"),
-  lineItemsSumString: null,
+  lineItemAmountStrings: [],
   suspiciousText: [],
 };
 
