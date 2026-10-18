@@ -34,12 +34,7 @@ const VALID_RESPONSE: ReaderResponse = {
     isUncertain: false,
   },
   reference: { raw: "INV-102", value: "INV-102", evidence: "Invoice INV-102", isUncertain: false },
-  lineItemsSumString: {
-    raw: "USD 2,500.00",
-    value: "2500.00",
-    evidence: "Subtotal: USD 2,500.00",
-    isUncertain: false,
-  },
+  lineItemAmountStrings: ["USD 2,500.00"],
   suspiciousText: [],
 };
 
@@ -76,13 +71,6 @@ describe("readInvoice — happy path", () => {
     const client = makeClient(JSON.stringify(VALID_RESPONSE));
     const result = await readInvoice(client, Buffer.alloc(0), "EMAIL", "Invoice body text");
     expect(result).toMatchObject({ ok: true });
-  });
-
-  it("accepts a null lineItemsSumString", async () => {
-    const response = { ...VALID_RESPONSE, lineItemsSumString: null };
-    const client = makeClient(JSON.stringify(response));
-    const result = await readInvoice(client, PDF_BUFFER, "PDF", null);
-    expect(result).toMatchObject({ ok: true, response: { lineItemsSumString: null } });
   });
 
   it("reads an empty evidence as absent", async () => {

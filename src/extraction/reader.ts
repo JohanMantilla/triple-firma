@@ -28,7 +28,7 @@ export const ReaderResponseSchema = z.object({
   issueDateString: ReaderFieldSchema,
   dueDateString: ReaderFieldSchema,
   reference: ReaderFieldSchema,
-  lineItemsSumString: ReaderFieldSchema.nullable(),
+  lineItemAmountStrings: z.array(z.string()),
   suspiciousText: z.array(z.string()),
 });
 export type ReaderResponse = z.infer<typeof ReaderResponseSchema>;
