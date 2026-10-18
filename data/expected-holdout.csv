@@ -1,0 +1,9 @@
+file,expected_outcome,expected_rules
+holdout/holdout-01.eml,PAY,
+holdout/holdout-02.pdf,PAY,
+holdout/holdout-03.txt,BLOCK,R2
+holdout/holdout-04.pdf,ESCALATE,R3
+holdout/holdout-05.eml,BLOCK,R4
+holdout/holdout-06.pdf,ESCALATE,R5
+holdout/holdout-07.txt,ESCALATE,R8
+holdout/holdout-08.pdf,ESCALATE,R6

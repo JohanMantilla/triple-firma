@@ -1,0 +1,92 @@
+[
+  {
+    "file": "holdout/holdout-01.eml",
+    "payee": "Luna Diseño SA de CV",
+    "amountMinor": 3000000,
+    "currency": "MXN",
+    "dueDate": "2026-11-01",
+    "reference": "LD-2214",
+    "lineItemsTotalMinor": 3000000,
+    "suspiciousText": [],
+    "ambiguousFields": []
+  },
+  {
+    "file": "holdout/holdout-02.pdf",
+    "payee": "Dev Partners SAS",
+    "amountMinor": 720000000,
+    "currency": "COP",
+    "dueDate": "2026-11-02",
+    "reference": "FAC-1063",
+    "lineItemsTotalMinor": 720000000,
+    "suspiciousText": [],
+    "ambiguousFields": []
+  },
+  {
+    "file": "holdout/holdout-03.txt",
+    "payee": "Meseta Medios SAS",
+    "amountMinor": 600000000,
+    "currency": "COP",
+    "dueDate": "2026-10-20",
+    "reference": "MM-0450",
+    "lineItemsTotalMinor": null,
+    "suspiciousText": [],
+    "ambiguousFields": []
+  },
+  {
+    "file": "holdout/holdout-04.pdf",
+    "payee": "Río Claro Estudio SAS",
+    "amountMinor": 70000,
+    "currency": "USD",
+    "dueDate": "2026-11-01",
+    "reference": "RC-0021",
+    "lineItemsTotalMinor": 70000,
+    "suspiciousText": [],
+    "ambiguousFields": []
+  },
+  {
+    "file": "holdout/holdout-05.eml",
+    "payee": "Pampa Datos SRL",
+    "amountMinor": 180000000,
+    "currency": "ARS",
+    "dueDate": "2026-11-04",
+    "reference": "PD-0440",
+    "lineItemsTotalMinor": 180000000,
+    "suspiciousText": [],
+    "ambiguousFields": []
+  },
+  {
+    "file": "holdout/holdout-06.pdf",
+    "payee": "Sierra Legal Asociados SC",
+    "amountMinor": 7000000,
+    "currency": "MXN",
+    "dueDate": "2026-11-05",
+    "reference": "SL-2612",
+    "lineItemsTotalMinor": 7000000,
+    "suspiciousText": [],
+    "ambiguousFields": []
+  },
+  {
+    "file": "holdout/holdout-07.txt",
+    "payee": "Ñandú Contadores SRL",
+    "amountMinor": 90000000,
+    "currency": null,
+    "dueDate": "2026-11-05",
+    "reference": "NC-0104",
+    "lineItemsTotalMinor": null,
+    "suspiciousText": [],
+    "ambiguousFields": [
+      "currency"
+    ]
+  },
+  {
+    "file": "holdout/holdout-08.pdf",
+    "payee": "Quito QA Cía. Ltda.",
+    "amountMinor": 120000,
+    "currency": "USD",
+    "dueDate": "2026-11-05",
+    "reference": "QQ-331",
+    "lineItemsTotalMinor": 120000,
+    "suspiciousText": [],
+    "ambiguousFields": []
+  }
+]

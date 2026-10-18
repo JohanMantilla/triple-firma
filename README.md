@@ -194,3 +194,14 @@ La licencia del proyecto debe definirse explícitamente en el repositorio antes 
 
 **Triple Firma — Automatización financiera con reglas claras, decisiones explicables y supervisión humana.**
 
+- Ningún dato real de clientes ni de empresas: todo el set es ficticio.
+- No se mueve dinero real ni se conecta a ninguna plataforma de pagos.
+- No es detección de fraude, cumplimiento ni verificación de identidad.
+
+## Límites conocidos
+
+Los encontramos al auditar el motor y decidimos no cambiar las reglas antes de la demo.
+
+- **La misma factura con una etiqueta en la referencia.** Una factura es duplicada si coinciden beneficiario, monto, moneda y referencia. La referencia ignora mayúsculas, espacios, guiones, barras y puntos ("FAC-1041" es "fac 1041"), pero no una etiqueta pegada al número: "N° FAC-1041" y "FAC-1041" no se reconocen como la misma factura, que podría pagarse otra vez. En nuestro set el Lector copia solo el número ("Factura N°: FAC-1041" → "FAC-1041"), y si sus dos lecturas no coinciden, la factura se escala.
+- **Una copia con un nombre parecido.** "Acmé Corp" frente a "Acme Corp", o con una letra cirílica, no se marca como duplicado, pero se escala por nombre parecido y la decide una persona.
+- **Números distintos son facturas distintas.** "FAC-41" y "FAC-1041", o "FAC-1041" y "ED_1041", no son duplicados. El mismo número con otro monto tampoco: si no coincide con lo acordado, se frena o se escala.

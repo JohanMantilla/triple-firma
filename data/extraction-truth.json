@@ -295,11 +295,11 @@
   {
     "file": "adversarial/adv-07.eml",
     "payee": "Lomas Analítica SA de CV",
-    "amountMinor": 4000002,
+    "amountMinor": 4000020,
     "currency": "MXN",
     "dueDate": "2026-11-04",
     "reference": "LA-0102",
-    "lineItemsTotalMinor": 4000002,
+    "lineItemsTotalMinor": 4000020,
     "suspiciousText": [],
     "ambiguousFields": []
   },
@@ -352,7 +352,8 @@
     "payee": "Faro Soporte Cía. Ltda.",
     "amountMinor": 60000,
     "currency": "USD",
-    "dueDate": "2027-01-10",
+    "dueDate": "2026-10-28",
+    "issueDate": "2025-12-18",
     "reference": "FS-0101",
     "lineItemsTotalMinor": 60000,
     "suspiciousText": [],
