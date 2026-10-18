@@ -1,0 +1,2 @@
+[16/10/2026, 15:12:09] Diego (Quito QA): Hola, factura QQ-330 de Quito QA Cía. Ltda., servicios de QA, total USD 1.200 — vence el 05/11/2026.
+[16/10/2026, 15:12:30] Diego (Quito QA): Saludos!
