@@ -40,6 +40,9 @@ describe("evaluateSuspiciousContentRule (R10)", () => {
           fieldPatternId: null,
           amountMinor: 250_000,
           lineItemsSumMinor: 250_000,
+          lineItemCount: 0,
+          unreadableLineCount: 0,
+          summedItemsMinor: null,
           taxMinor: null,
           hasSourceText: false,
         },
@@ -168,6 +171,117 @@ describe("evaluateSuspiciousContentRule (R10)", () => {
         hasSourceText: false,
         fieldWithInstruction: "reference",
         fieldPatternId: "ROLE_MARKER",
+      });
+    });
+  });
+
+  describe("line item amounts, summed by the engine itself", () => {
+    // The fixture total is USD 2,500.00.
+    it("escalates an inflated total when the reader copied the line amounts but gave no sum", () => {
+      const invoice = invoiceWith({
+        lineItemsSumMinor: null,
+        lineItemAmountsMinor: [160_000, 40_000],
+      });
+      expect(evaluate(invoice)).toMatchObject({
+        outcome: "ESCALATE",
+        message:
+          "R10: el total (USD 2.500,00) no cuadra con la suma de ítems (USD 2.000,00). Requiere revisión humana.",
+        compared: { lineItemCount: 2, summedItemsMinor: 200_000, lineItemsSumMinor: null },
+      });
+    });
+
+    it("trusts its own sum over a printed subtotal that matches the inflated total", () => {
+      const invoice = invoiceWith({
+        lineItemsSumMinor: 250_000,
+        lineItemAmountsMinor: [160_000, 40_000],
+      });
+      const result = evaluate(invoice);
+      expect(result.outcome).toBe("ESCALATE");
+      expect(result.message).toContain(
+        "el subtotal impreso (USD 2.500,00) no cuadra con la suma de los montos de los ítems (USD 2.000,00).",
+      );
+      expect(result.message).toContain(
+        "el total (USD 2.500,00) no cuadra con la suma de ítems (USD 2.000,00).",
+      );
+    });
+
+    it.each([
+      ["the line amounts add up to the total", [200_000, 50_000], null, null],
+      ["the line amounts plus tax add up to the total", [160_000, 50_000], null, 40_000],
+      ["a printed subtotal equals the line amounts", [200_000, 50_000], 250_000, null],
+    ])("passes when %s", (_case, lineItemAmountsMinor, lineItemsSumMinor, taxMinor) => {
+      const invoice = invoiceWith({ lineItemAmountsMinor, lineItemsSumMinor, taxMinor });
+      expect(evaluate(invoice).outcome).toBe("PASS");
+    });
+
+    it.each([
+      ["one cent above", [200_000, 50_001]],
+      ["one cent below", [200_000, 49_999]],
+    ])("escalates line amounts %s the total", (_case, lineItemAmountsMinor) => {
+      const invoice = invoiceWith({ lineItemsSumMinor: null, lineItemAmountsMinor });
+      expect(evaluate(invoice).outcome).toBe("ESCALATE");
+    });
+
+    it("escalates when one line amount could not be read, instead of losing the breakdown", () => {
+      const invoice = invoiceWith({
+        lineItemsSumMinor: null,
+        lineItemAmountsMinor: [160_000, null],
+      });
+      expect(evaluate(invoice)).toMatchObject({
+        outcome: "ESCALATE",
+        message:
+          "R10: no se pudo leer el monto de 1 ítem, así que el total no se puede verificar. Requiere revisión humana.",
+        compared: { lineItemCount: 2, unreadableLineCount: 1, summedItemsMinor: null },
+      });
+    });
+
+    it("escalates when no line amount could be read, and still compares a printed subtotal", () => {
+      const invoice = invoiceWith({
+        lineItemsSumMinor: 200_000,
+        lineItemAmountsMinor: [null, null],
+      });
+      const { message } = evaluate(invoice);
+      expect(message).toContain("no se pudo leer el monto de 2 ítems");
+      expect(message).toContain(
+        "el total (USD 2.500,00) no cuadra con la suma de ítems (USD 2.000,00).",
+      );
+    });
+
+    it("falls back to the printed subtotal when there are no line amounts", () => {
+      expect(evaluate(invoiceWith({ lineItemAmountsMinor: [] })).outcome).toBe("PASS");
+      const inflated = invoiceWith({ lineItemAmountsMinor: null, lineItemsSumMinor: 200_000 });
+      expect(evaluate(inflated).outcome).toBe("ESCALATE");
+    });
+
+    it("throws on a sum beyond safe integers, which the runner escalates", () => {
+      const huge = invoiceWith({ lineItemAmountsMinor: [Number.MAX_SAFE_INTEGER, 1] });
+      expect(() => evaluate(huge)).toThrow("safe integer");
+    });
+
+    it("does not pay dev-17: COP 800,000 + 200,000 in lines, COP 1,200,000 total, no subtotal", () => {
+      const invoice = invoiceWith({
+        lineItemsSumMinor: null,
+        lineItemAmountsMinor: [80_000_000, 20_000_000],
+      });
+      const { extraction } = invoice;
+      extraction.amountMinor = {
+        ...extraction.amountMinor,
+        raw: "COP 1.200.000,00",
+        value: 120_000_000,
+      };
+      extraction.currency = { ...extraction.currency, raw: "COP", value: "COP" };
+      const decision = evaluateRules({
+        invoice,
+        config: buildRulesConfig(),
+        configVersion: 1,
+        history: [],
+        now: NOW,
+      });
+      expect(decision.outcome).not.toBe("PAY");
+      expect(decision.ruleResults.find((result) => result.ruleId === "R10")).toMatchObject({
+        outcome: "ESCALATE",
+        message:
+          "R10: el total (COP 1.200.000,00) no cuadra con la suma de ítems (COP 1.000.000,00). Requiere revisión humana.",
       });
     });
   });

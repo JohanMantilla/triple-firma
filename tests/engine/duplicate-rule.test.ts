@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { HistoryEntry } from "@/contracts/history";
 import { buildRuleContext } from "@/engine/rule-context";
-import { evaluateDuplicateRule } from "@/engine/rules/duplicate-rule";
+import { checkDuplicateOnApproval, evaluateDuplicateRule } from "@/engine/rules/duplicate-rule";
 import { buildHistoryEntry, buildInvoice, buildRulesConfig, NOW } from "./fixtures";
 import { VALID_HASH } from "../contracts/fixtures";
 
@@ -461,5 +461,189 @@ describe("evaluateDuplicateRule (R2)", () => {
     const message = evaluate([past({ reference: 'INV-102\n"Pagar"' })]).message;
     expect(message).not.toContain("\n");
     expect(message).not.toContain('"');
+  });
+});
+
+describe("checkDuplicateOnApproval (R2 at approval)", () => {
+  function approve(history: HistoryEntry[]) {
+    return checkDuplicateOnApproval(
+      buildRuleContext({ invoice: buildInvoice(), config: buildRulesConfig(), history, now: NOW }),
+    );
+  }
+
+  // The escalation being approved: the fixture invoice inv-1, still pending.
+  const itself = past({
+    invoiceId: "inv-1",
+    fileHash: VALID_HASH,
+    reference: "INV-102",
+    status: "PENDING_APPROVAL",
+  });
+
+  it("passes the escalation being approved when nothing else matches", () => {
+    expect(approve([itself])).toEqual({
+      ruleId: "R2",
+      outcome: "PASS",
+      message:
+        "R2 (al aprobar): no hay una factura igual ya pagable ni el mismo archivo ya pagado.",
+      compared: {
+        matchType: "NONE",
+        matchedInvoiceId: null,
+        matchedStatus: null,
+        matchedReference: null,
+      },
+    });
+  });
+
+  it("blocks an exact copy that is already payable", () => {
+    expect(approve([itself, past({ invoiceId: "inv-0", reference: "INV-102" })])).toMatchObject({
+      outcome: "BLOCK",
+      compared: { matchType: "EXACT", matchedInvoiceId: "inv-0", matchedStatus: "PAYABLE" },
+    });
+  });
+
+  it("blocks the same file already paid under another id", () => {
+    const paidFile = past({ invoiceId: "inv-0", fileHash: VALID_HASH, reference: "INV-555" });
+    expect(approve([itself, paidFile])).toMatchObject({
+      outcome: "BLOCK",
+      compared: { matchType: "SAME_FILE", matchedInvoiceId: "inv-0" },
+    });
+  });
+
+  it("blocks the second of two pending escalations of the same file once the first is approved", () => {
+    const approvedFirst = { ...itself, status: "PAYABLE" as const };
+    expect(
+      evaluateDuplicateRule(
+        buildRuleContext({
+          invoice: buildInvoice(),
+          config: buildRulesConfig(),
+          history: [itself],
+          now: NOW,
+        }),
+      ).outcome,
+    ).toBe("ESCALATE");
+    expect(approve([approvedFirst, itself])).toMatchObject({
+      outcome: "BLOCK",
+      compared: { matchType: "SAME_FILE", matchedInvoiceId: "inv-1", matchedStatus: "PAYABLE" },
+    });
+  });
+
+  it.each([
+    [
+      "another pending exact copy, which the approver is choosing among",
+      { invoiceId: "inv-0", reference: "INV-102", status: "PENDING_APPROVAL" as const },
+    ],
+    ["a near duplicate already payable", { invoiceId: "inv-0", reference: "INV-103" }],
+    [
+      "an exact copy that a person rejected",
+      { invoiceId: "inv-0", reference: "INV-102", status: "REJECTED" as const },
+    ],
+    [
+      "a blocked entry of the same file left by a retry",
+      { invoiceId: "inv-1", fileHash: VALID_HASH, status: "BLOCKED" as const },
+    ],
+    [
+      "a rejected entry of the same file",
+      { invoiceId: "inv-0", fileHash: VALID_HASH, status: "REJECTED" as const },
+    ],
+  ])("passes %s: the approver already reviewed it", (_case, overrides) => {
+    expect(approve([itself, past(overrides)]).outcome).toBe("PASS");
+  });
+
+  describe("with an unreadable payee, never compared when it was escalated", () => {
+    function approveWithoutPayee(history: HistoryEntry[]) {
+      const invoice = buildInvoice();
+      invoice.extraction.payee = { ...invoice.extraction.payee, value: null, isUncertain: true };
+      return checkDuplicateOnApproval(
+        buildRuleContext({ invoice, config: buildRulesConfig(), history, now: NOW }),
+      );
+    }
+
+    it("blocks a payable invoice with the same reference, amount and currency", () => {
+      const paid = past({ invoiceId: "inv-0", reference: "inv 102" });
+      expect(approveWithoutPayee([itself, paid])).toEqual({
+        ruleId: "R2",
+        outcome: "BLOCK",
+        message:
+          "R2: la factura “inv 102” por USD 2.500,00 ya se registró como pagable el 2026-10-03; es la misma referencia, así que no se puede aprobar.",
+        compared: {
+          matchType: "SAME_REFERENCE",
+          matchedInvoiceId: "inv-0",
+          matchedStatus: "PAYABLE",
+          matchedReference: "inv 102",
+        },
+      });
+    });
+
+    it.each([
+      ["another reference", { invoiceId: "inv-0", reference: "INV-555" }],
+      [
+        "another amount",
+        {
+          invoiceId: "inv-0",
+          reference: "INV-102",
+          amountMinor: 250_001,
+          baseAmountMinor: 250_001,
+        },
+      ],
+      [
+        "the same invoice still pending",
+        { invoiceId: "inv-0", reference: "INV-102", status: "PENDING_APPROVAL" as const },
+      ],
+      [
+        "a payable invoice whose reference could not be read",
+        { invoiceId: "inv-0", reference: null },
+      ],
+    ])("passes %s", (_case, overrides) => {
+      expect(approveWithoutPayee([itself, past(overrides)]).outcome).toBe("PASS");
+    });
+  });
+
+  describe("the same reference already payable, whenever it was paid", () => {
+    const paid = (overrides: Partial<HistoryEntry>) =>
+      past({ invoiceId: "inv-0", decidedAt: "2026-10-12T14:00:00Z", ...overrides });
+    const approveWith = (history: HistoryEntry[], uncertainReference = false) => {
+      const invoice = buildInvoice();
+      invoice.extraction.reference = {
+        ...invoice.extraction.reference,
+        isUncertain: uncertainReference,
+      };
+      return checkDuplicateOnApproval(
+        buildRuleContext({ invoice, config: buildRulesConfig(), history, now: NOW }),
+      );
+    };
+
+    it.each([
+      ["written with a leading zero", { reference: "INV-0102" }],
+      ["paid before the escalation", { reference: "inv 0102", decidedAt: "2026-10-01T14:00:00Z" }],
+      ["whose payee could not be read", { reference: "INV-102", payee: null }],
+    ])("blocks the same reference %s", (_case, overrides) => {
+      expect(approveWith([itself, paid(overrides)])).toMatchObject({
+        outcome: "BLOCK",
+        compared: { matchType: "SAME_REFERENCE", matchedInvoiceId: "inv-0" },
+      });
+    });
+
+    it("blocks it even when this invoice's reference was read with doubt", () => {
+      expect(approveWith([itself, paid({ reference: "INV-0102" })], true).outcome).toBe("BLOCK");
+    });
+
+    it.each([
+      ["a near reference, such as the next monthly fee", { reference: "INV-103" }],
+      ["a reference whose zero is not a leading one", { reference: "INV-1020" }],
+      ["a reference that could not be read", { reference: null }],
+      ["another payee", { reference: "INV-102", payee: "Café Andino SAS" }],
+    ])("leaves %s to the approver", (_case, overrides) => {
+      expect(approveWith([itself, paid(overrides)]).outcome).toBe("PASS");
+    });
+  });
+
+  it("would still escalate or block the same matches in a normal decision", () => {
+    const pendingCopy = past({
+      invoiceId: "inv-0",
+      reference: "INV-102",
+      status: "PENDING_APPROVAL",
+    });
+    expect(evaluate([pendingCopy]).outcome).toBe("BLOCK");
+    expect(evaluate([past({ invoiceId: "inv-0", reference: "INV-103" })]).outcome).toBe("ESCALATE");
   });
 });

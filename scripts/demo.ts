@@ -11,8 +11,14 @@ const DEMO_SETS = ["dev", "adversarial"] as const;
 async function main(): Promise<void> {
   const isLive = process.argv.includes("--live");
   // With no key the reader fails on a cache miss, so that invoice escalates instead of being read.
-  if (!isLive) delete process.env.ANTHROPIC_API_KEY;
+  if (!isLive) {
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_AUTH_TOKEN;
+    delete process.env.ANTHROPIC_BASE_URL;
+  }
 
+  const url = process.env.TURSO_DATABASE_URL;
+  if (url) console.log(`Resetting database: ${url.startsWith("file:") ? url : new URL(url).host}`);
   const db = await openDb();
   await resetDb(db);
   await saveRulesConfig(db, await readCompanyConfig(), DATASET_NOW);

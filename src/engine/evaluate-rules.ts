@@ -84,7 +84,7 @@ const MAX_ERROR_LENGTH = 500;
 
 // Reading the reason must never throw itself: a thrown object may have a throwing toString or message
 // getter, or no prototype at all.
-function describeError(error: unknown): string {
+export function describeError(error: unknown): string {
   try {
     const reason =
       error instanceof Error && typeof error.message === "string" ? error.message : String(error);

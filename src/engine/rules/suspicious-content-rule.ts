@@ -20,16 +20,31 @@ type ScannedField = (typeof SCANNED_FIELDS)[number];
 // text of emails and chats, and in what was read for each field, which also covers PDFs and images),
 // or when the line items plus tax do not add up to the amount. It never blocks and never passes
 // anything another rule escalates: the content of an invoice can only make a decision stricter.
+//
+// The engine adds up the amount of each line itself (lineItemAmountsMinor): the reader only copies
+// them, so a reader that skips or miscomputes the sum cannot hide an inflated total. When the invoice
+// also prints a subtotal, it must equal that sum. Without line amounts, the printed subtotal is used.
 export function evaluateSuspiciousContentRule(ctx: RuleContext): RuleResult {
   const { extraction, sourceText } = ctx.invoice;
   const { suspiciousText, lineItemsSumMinor } = extraction;
   const taxMinor = extraction.taxMinor ?? null;
   const sourceMatch = sourceText === null ? null : findInstruction(sourceText);
   const fieldMatch = findInstructionInFields(extraction);
-  const isTotalMismatch =
+  const lineItemAmounts = extraction.lineItemAmountsMinor ?? [];
+  const readAmounts = lineItemAmounts.filter((amount): amount is number => amount !== null);
+  const unreadableLineCount = lineItemAmounts.length - readAmounts.length;
+  // A partial sum would only add a confusing mismatch: an unreadable line already escalates.
+  const summedItemsMinor =
+    unreadableLineCount > 0 || readAmounts.length === 0 ? null : sumMinor(readAmounts);
+  const itemsTotalMinor = summedItemsMinor ?? lineItemsSumMinor;
+  const isSubtotalMismatch =
+    summedItemsMinor !== null &&
     lineItemsSumMinor !== null &&
+    summedItemsMinor !== lineItemsSumMinor;
+  const isTotalMismatch =
+    itemsTotalMinor !== null &&
     ctx.amountMinor !== null &&
-    BigInt(lineItemsSumMinor) + BigInt(taxMinor ?? 0) !== BigInt(ctx.amountMinor);
+    BigInt(itemsTotalMinor) + BigInt(taxMinor ?? 0) !== BigInt(ctx.amountMinor);
 
   const compared = {
     readerFlagCount: suspiciousText.length,
@@ -38,6 +53,9 @@ export function evaluateSuspiciousContentRule(ctx: RuleContext): RuleResult {
     fieldPatternId: fieldMatch?.patternId ?? null,
     amountMinor: ctx.amountMinor,
     lineItemsSumMinor,
+    lineItemCount: lineItemAmounts.length,
+    unreadableLineCount,
+    summedItemsMinor,
     taxMinor,
     hasSourceText: sourceText !== null,
   };
@@ -52,10 +70,16 @@ export function evaluateSuspiciousContentRule(ctx: RuleContext): RuleResult {
         MESSAGES.fieldLabels[fieldMatch.field],
         fieldMatch.match,
       ),
+    unreadableLineCount > 0 && MESSAGES.suspiciousContent.unreadableLineItems(unreadableLineCount),
+    isSubtotalMismatch &&
+      MESSAGES.suspiciousContent.subtotalMismatch(
+        money(lineItemsSumMinor ?? 0),
+        money(summedItemsMinor ?? 0),
+      ),
     isTotalMismatch &&
       MESSAGES.suspiciousContent.totalMismatch(
         money(ctx.amountMinor ?? 0),
-        money(lineItemsSumMinor ?? 0),
+        money(itemsTotalMinor ?? 0),
         taxMinor === null ? null : money(taxMinor),
       ),
   ].filter((reason): reason is string => typeof reason === "string");
@@ -64,7 +88,7 @@ export function evaluateSuspiciousContentRule(ctx: RuleContext): RuleResult {
     return {
       ruleId: "R10",
       outcome: "PASS",
-      message: passedMessage(lineItemsSumMinor, ctx.amountMinor, taxMinor),
+      message: passedMessage(itemsTotalMinor, ctx.amountMinor, taxMinor),
       compared,
     };
   }
@@ -78,14 +102,23 @@ export function evaluateSuspiciousContentRule(ctx: RuleContext): RuleResult {
 
 // Which total check ran, so a passing result never claims a comparison that did not happen.
 function passedMessage(
-  lineItemsSumMinor: number | null,
+  itemsTotalMinor: number | null,
   amountMinor: number | null,
   taxMinor: number | null,
 ): string {
   const { passed } = MESSAGES.suspiciousContent;
-  if (lineItemsSumMinor === null) return passed.noLineItems;
+  if (itemsTotalMinor === null) return passed.noLineItems;
   if (amountMinor === null) return passed.amountUnreadable;
   return taxMinor === null ? passed.matches : passed.matchesWithTax;
+}
+
+// Sums stay exact: a total beyond safe integers throws, and the runner escalates the rule.
+function sumMinor(amounts: readonly number[]): number {
+  const total = amounts.reduce((sum, amount) => sum + BigInt(amount), 0n);
+  if (total > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error("Line item sum exceeds safe integer range");
+  }
+  return Number(total);
 }
 
 // The first instruction found in what was read for a field, raw text first and then its evidence.

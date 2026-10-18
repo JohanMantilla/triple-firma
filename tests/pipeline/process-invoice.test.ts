@@ -3,8 +3,9 @@ import type { Client } from "@libsql/client";
 import { extractInvoice, makeUncertainExtraction } from "@/extraction/extract-invoice";
 import { detectSourceFormat, processInvoice } from "@/pipeline/process-invoice";
 import { saveRulesConfig } from "@/pipeline/save-rules-config";
+import { insertApproval } from "@/store/approval-repository";
 import { listDecisionRecords } from "@/store/decision-repository";
-import { buildExtraction, buildRulesConfig } from "../contracts/fixtures";
+import { buildApproval, buildExtraction, buildRulesConfig } from "../contracts/fixtures";
 import { NOW } from "../engine/fixtures";
 import { countAuditEntries, openMemoryDb, openTempFileDb } from "../store/fixtures";
 
