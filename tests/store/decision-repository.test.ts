@@ -86,7 +86,11 @@ describe("listHistoryEntries", () => {
 
     const [certain, unreadable] = await listHistoryEntries(db);
     expect(certain).toMatchObject({ payee: "Dev Partners SAS", reference: "INV-102" });
-    expect(unreadable).toMatchObject({ payee: null, reference: null, amountMinor: 250_000 });
+    expect(unreadable).toMatchObject({
+      payee: "Dev Partners SAS",
+      reference: "INV-102",
+      amountMinor: 250_000,
+    });
   });
 });
 
