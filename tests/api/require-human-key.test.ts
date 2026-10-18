@@ -20,16 +20,16 @@ describe("requireHumanKey", () => {
     }
   });
 
-  it("stays open in development when no key is configured", () => {
+  it.each(["development", "production"])("stays open in %s when no key is configured", (env) => {
     vi.stubEnv("HUMAN_ACTIONS_KEY", "");
-    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("NODE_ENV", env);
     expect(requireHumanKey(request())).toBeNull();
+    expect(requireHumanKey(request("anything"))).toBeNull();
   });
 
-  it("refuses in production when no key is configured", () => {
-    vi.stubEnv("HUMAN_ACTIONS_KEY", "");
+  it("still refuses a wrong key in production once a key is configured", () => {
+    vi.stubEnv("HUMAN_ACTIONS_KEY", "s3cret");
     vi.stubEnv("NODE_ENV", "production");
     expect(requireHumanKey(request())?.status).toBe(401);
-    expect(requireHumanKey(request(""))?.status).toBe(401);
   });
 });

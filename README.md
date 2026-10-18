@@ -192,7 +192,7 @@ La base del deploy es `triple-firma-demo` y **solo quien despliega la reinicia**
 3. Carga la base desde tu máquina con esas variables en `.env.demo`: `npx tsx --env-file=.env.demo scripts/demo.ts`.
 4. Abre la URL y comprueba que `GET /api/decisions` responde y que `GET /api/audit/verify` devuelve `isValid: true`. La aprobación desde la bandeja llegará con el endpoint de aprobaciones.
 
-> **Advertencia:** el paso 3 **reinicia la base a la que apunta** `.env.demo`. Además, `PUT /api/config` y `POST /api/approvals/{decisionId}` exigen la clave `HUMAN_ACTIONS_KEY` en el encabezado `x-api-key`; en producción, sin esa variable responden 401.
+> **Advertencia:** el paso 3 **reinicia la base a la que apunta** `.env.demo`. Además, en la demo pública aprobar escaladas y guardar reglas no piden clave: cualquiera con la URL puede hacerlo. Compártela solo con el jurado; si alguien desordena la demo, el paso 3 la restaura sin gastar tokens. Para exigir una clave, agrega `HUMAN_ACTIONS_KEY` en Vercel: `PUT /api/config` y `POST /api/approvals/{decisionId}` la pedirán en el encabezado `x-api-key`.
 
 ## Plan B sin internet
 
@@ -218,6 +218,11 @@ tests/            # Pruebas
 Triple Firma está en desarrollo. El objetivo es integrar el motor de decisiones, la extracción de información y la interfaz de usuario en un flujo coherente que permita probar las decisiones sobre un conjunto de facturas.
 
 Las funcionalidades disponibles deben verificarse en el código y en la aplicación antes de considerarlas terminadas.
+
+## Próximos pasos
+
+- **Autenticación de quien aprueba.** En la demo pública, aprobar escaladas y guardar reglas no pide credenciales, para no interrumpir la presentación. El backend ya trae el control: con la variable `HUMAN_ACTIONS_KEY` configurada, esas acciones exigen la clave en el encabezado `x-api-key`. El siguiente paso es un inicio de sesión real, con roles (quien aprueba y quien administra reglas), en lugar de una clave compartida.
+- **Lectura en vivo en la URL pública.** Hoy la demo decide desde la caché y una factura nueva se escala por seguridad; con una clave de Anthropic en el servidor se leería al momento.
 
 ## Contribuciones
 
