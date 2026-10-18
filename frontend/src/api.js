@@ -1,9 +1,35 @@
 // The only door to the backend. Maps API contracts to the shapes the prototype UI already uses.
-async function request(path, init) {
-  const response = await fetch(path, init);
+async function readBody(response) {
   const body = await response.json().catch(() => null);
   if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`);
   return body;
+}
+
+const request = async (path, init) => readBody(await fetch(path, init));
+
+const HUMAN_KEY = 'triple-firma-human-key';
+
+function readHumanKey() {
+  try { return sessionStorage.getItem(HUMAN_KEY) || ''; } catch { return ''; }
+}
+
+function storeHumanKey(key) {
+  try { sessionStorage.setItem(HUMAN_KEY, key); } catch { /* private mode: asked again next time */ }
+}
+
+// Approvals and rule changes need the approval key (x-api-key). It is asked only when the backend
+// answers 401, kept for this browser tab, and never built into the bundle.
+async function requestAsHuman(path, init) {
+  const send = key => fetch(path, { ...init, headers: { ...init.headers, 'x-api-key': key } });
+  let response = await send(readHumanKey());
+  if (response.status === 401) {
+    const key = window.prompt('Clave de aprobación');
+    if (!key) throw new Error('Se necesita la clave de aprobación');
+    response = await send(key);
+    if (response.status === 401) throw new Error('Clave de aprobación incorrecta');
+    storeHumanKey(key);
+  }
+  return readBody(response);
 }
 
 const DECISION_BY_STATUS = { PAYABLE: 'pay', BLOCKED: 'blocked', PENDING_APPROVAL: 'approval', REJECTED: 'rejected' };
@@ -15,7 +41,7 @@ function toInvoice(record) {
   const { invoice, decision, approval } = record;
   const { extraction } = invoice;
   const payee = extraction.payee.value || 'Beneficiario no legible';
-  const minor = decision.baseAmountMinor ?? decision.amountMinor ?? 0;
+  const minor = decision.baseAmountMinor ?? 0; // USD, as the screens show it
   const checks = decision.ruleResults.map(r => ({ label: r.ruleId, status: CHECK_BY_OUTCOME[r.outcome], detail: r.message }));
   return {
     id: extraction.reference.value || record.fileName,
@@ -42,7 +68,7 @@ export const uploadInvoice = async file => {
 };
 
 export const resolveApproval = async (decisionId, action, approver, comment) =>
-  toInvoice(await request(`/api/approvals/${encodeURIComponent(decisionId)}`, {
+  toInvoice(await requestAsHuman(`/api/approvals/${encodeURIComponent(decisionId)}`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ action, approver, comment })
   }));
@@ -70,6 +96,6 @@ export const saveRules = async (rules, config) => {
     approvalThresholdMinor: Math.round(rules.requireApprovalAbove * 100),
     allowedPayees: rules.allowedVendors.split(',').map(v => v.trim()).filter(Boolean)
   };
-  const saved = await request('/api/config', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(next) });
+  const saved = await requestAsHuman('/api/config', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(next) });
   return { rules: toRules(saved), config: saved.config };
 };
