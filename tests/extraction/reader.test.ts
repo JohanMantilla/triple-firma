@@ -87,6 +87,21 @@ describe("READER_RESPONSE_JSON_SCHEMA", () => {
     const unions = JSON.stringify(READER_RESPONSE_JSON_SCHEMA).match(/"anyOf"/g) ?? [];
     expect(unions.length).toBeLessThanOrEqual(16);
   });
+
+  it("reads an empty evidence as absent", async () => {
+    const response = { ...VALID_RESPONSE, payee: { ...FIELD, evidence: "" } };
+    const client = makeClient(JSON.stringify(response));
+    const result = await readInvoice(client, PDF_BUFFER, "PDF", null);
+    expect(result).toMatchObject({ ok: true, response: { payee: { evidence: null } } });
+  });
+});
+
+describe("READER_RESPONSE_JSON_SCHEMA", () => {
+  // The API rejects a structured-output schema with more than 16 union (anyOf) parameters.
+  it("stays within the API limit of 16 union parameters", () => {
+    const unions = JSON.stringify(READER_RESPONSE_JSON_SCHEMA).match(/"anyOf"/g) ?? [];
+    expect(unions.length).toBeLessThanOrEqual(16);
+  });
 });
 
 describe("readInvoice — prompt version", () => {

@@ -39,6 +39,7 @@ CLAUDE.local.md
 # tooling caches and logs
 .eslintcache
 *.log
+/data/cache/*.json
 
 # OS files
 .DS_Store
